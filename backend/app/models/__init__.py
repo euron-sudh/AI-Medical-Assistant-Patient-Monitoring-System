@@ -20,3 +20,5 @@ from app.models.notification import Notification  # noqa: F401
 from app.models.report import MedicalReport, LabValue  # noqa: F401
 from app.models.symptom_session import SymptomSession  # noqa: F401
 from app.models.conversation import Conversation  # noqa: F401
+from app.models.appointment import Appointment  # noqa: F401
+from app.models.telemedicine import TelemedicineSession  # noqa: F401
