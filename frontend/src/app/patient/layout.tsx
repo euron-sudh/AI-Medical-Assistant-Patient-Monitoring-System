@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { ApiKeyButton } from "@/components/shared/api-key-modal";
 
 interface PatientLayoutProps {
   children: React.ReactNode;
@@ -38,6 +39,9 @@ export default function PatientLayout({ children }: PatientLayoutProps) {
           <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
             Patient
           </span>
+          <div className="ml-auto">
+            <ApiKeyButton />
+          </div>
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-4 scrollbar-thin">

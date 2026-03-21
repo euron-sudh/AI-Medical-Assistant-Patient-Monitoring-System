@@ -1,6 +1,7 @@
 """Symptom session request/response schemas — Pydantic validation for symptom endpoints."""
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -9,7 +10,7 @@ class StartSessionRequest(BaseModel):
     """Schema for starting a new symptom check session."""
 
     chief_complaint: str = Field(..., min_length=1, max_length=2000)
-    symptoms: dict | None = None
+    symptoms: dict | list | None = None
 
 
 class SendMessageRequest(BaseModel):
@@ -25,7 +26,7 @@ class SymptomSessionResponse(BaseModel):
     patient_id: str
     status: str
     chief_complaint: str | None = None
-    symptoms: dict | None = None
+    symptoms: Any = None
     ai_analysis: dict | None = None
     triage_level: str | None = None
     recommended_action: str | None = None

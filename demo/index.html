@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedAssist AI — Product Demo</title>
+<style>
+/* ═══════════════════════════════════════════════
+   RESET & FOUNDATIONS
+   ═══════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;background:#0f172a}
+body{overflow:hidden;height:100vh;color:#e2e8f0}
+button{cursor:pointer;border:none;font:inherit;color:inherit}
+table{border-collapse:collapse;width:100%}
+
+/* ═══════════════════════════════════════════════
+   CSS VARIABLES
+   ═══════════════════════════════════════════════ */
+:root{
+  --sky-300:#7dd3fc;--sky-400:#38bdf8;--sky-500:#0ea5e9;--sky-600:#0284c7;
+  --blue-500:#3b82f6;--blue-600:#2563eb;--blue-950:#172554;
+  --red-400:#f87171;--red-500:#ef4444;
+  --amber-300:#fcd34d;--amber-400:#fbbf24;--amber-500:#f59e0b;
+  --green-400:#4ade80;--green-500:#22c55e;
+  --cyan-400:#22d3ee;--cyan-500:#06b6d4;
+  --purple-500:#8b5cf6;
+  --orange-500:#f97316;
+  --pink-500:#ec4899;
+  --slate-800:#1e293b;--slate-900:#0f172a;
+}
+
+/* ═══════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════ */
+@keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeInZoom{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+@keyframes slideDown{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes chatIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes barGrow{from{width:0}to{width:var(--target-width)}}
+@keyframes blobFloat{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(30px,-20px) scale(1.05)}66%{transform:translate(-20px,15px) scale(.95)}}
+
+.fade-in{animation:fadeIn .6s ease-out forwards}
+.fade-in-zoom{animation:fadeInZoom .8s ease-out forwards}
+.pulse-dot{animation:pulse 1.5s ease-in-out infinite}
+.slide-down{animation:slideDown .5s ease-out forwards}
+.chat-in{animation:chatIn .4s ease-out forwards}
+
+/* ═══════════════════════════════════════════════
+   START SCREEN
+   ═══════════════════════════════════════════════ */
+#start-screen{
+  position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#0f172a 0%,#172554 50%,#0f172a 100%);
+  transition:opacity .5s;
+}
+#start-screen .blob{position:absolute;border-radius:50%;filter:blur(80px);animation:blobFloat 8s ease-in-out infinite}
+#start-screen .blob-1{width:380px;height:380px;background:rgba(14,165,233,.12);top:-100px;left:-80px;animation-delay:0s}
+#start-screen .blob-2{width:380px;height:380px;background:rgba(37,99,235,.12);bottom:-100px;right:-80px;animation-delay:3s}
+#start-screen .blob-3{width:250px;height:250px;background:rgba(6,182,212,.06);top:35%;left:50%;transform:translateX(-50%);animation-delay:5s}
+
+.start-content{position:relative;z-index:2;text-align:center;max-width:640px;padding:0 24px}
+.logo-row{display:flex;align-items:center;gap:16px;justify-content:center;margin-bottom:32px}
+.logo-icon{width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,var(--sky-400),var(--blue-600));display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(14,165,233,.3)}
+.logo-icon svg{width:36px;height:36px;color:white}
+.logo-text h1{font-size:2.5rem;font-weight:800;color:white;line-height:1.1}
+.logo-text p{font-size:.875rem;font-weight:500;color:var(--sky-300)}
+.start-desc{font-size:1.1rem;color:rgba(186,230,253,.7);margin-bottom:40px;line-height:1.6}
+.start-btn{
+  display:inline-flex;align-items:center;gap:12px;padding:16px 40px;border-radius:12px;
+  background:linear-gradient(135deg,var(--sky-500),var(--blue-600));color:white;font-size:1.1rem;font-weight:600;
+  box-shadow:0 8px 32px rgba(14,165,233,.25);transition:transform .2s,box-shadow .2s;
+}
+.start-btn:hover{transform:scale(1.05);box-shadow:0 12px 40px rgba(14,165,233,.4)}
+.start-btn svg{width:24px;height:24px}
+.start-hint{margin-top:24px;font-size:.8rem;color:rgba(147,197,253,.4)}
+.close-btn{position:absolute;top:24px;right:24px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.6);transition:background .2s,color .2s}
+.close-btn:hover{background:rgba(255,255,255,.2);color:white}
+.close-btn svg{width:20px;height:20px}
+
+/* ═══════════════════════════════════════════════
+   PLAYER LAYOUT
+   ═══════════════════════════════════════════════ */
+#player{position:fixed;inset:0;z-index:50;display:none;flex-direction:column;background:linear-gradient(135deg,var(--slate-900),var(--slate-800),var(--slate-900))}
+#player.active{display:flex}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:rgba(0,0,0,.3);border-bottom:1px solid rgba(255,255,255,.08)}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.topbar-logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--sky-400),var(--blue-600));display:flex;align-items:center;justify-content:center}
+.topbar-logo svg{width:20px;height:20px;color:white}
+.topbar-title{font-size:.875rem;font-weight:600;color:white}
+.scene-badge{background:rgba(14,165,233,.2);color:var(--sky-300);font-size:.75rem;font-weight:500;padding:2px 10px;border-radius:9999px}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.ctrl-btn{padding:6px 12px;border-radius:8px;background:rgba(255,255,255,.1);font-size:.8rem;color:white;transition:background .2s}
+.ctrl-btn:hover{background:rgba(255,255,255,.2)}
+.ctrl-btn.icon-only{padding:6px}
+.ctrl-btn.icon-only svg{width:20px;height:20px}
+
+.scene-title-bar{text-align:center;padding:8px 0;background:rgba(0,0,0,.2)}
+.scene-title-bar h2{font-size:1.1rem;font-weight:700;color:white}
+
+.scene-area{flex:1;overflow-y:auto;padding:16px 32px}
+
+.caption-bar{border-top:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.4);padding:12px 24px;min-height:60px;display:flex;align-items:center;justify-content:center}
+.caption-text{text-align:center;font-size:.95rem;line-height:1.6;color:rgba(191,219,254,.9);max-width:800px}
+
+.progress-track{height:6px;width:100%;background:rgba(255,255,255,.08)}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--sky-400),var(--blue-500));transition:width .15s linear}
+
+/* End screen */
+.end-overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,.85);backdrop-filter:blur(8px);z-index:10}
+.end-overlay.active{display:flex}
+.end-content{text-align:center}
+.end-content h2{font-size:1.8rem;font-weight:700;color:white;margin:24px 0 8px}
+.end-content p{color:rgba(186,230,253,.7);margin-bottom:24px}
+.end-btns{display:flex;gap:16px;justify-content:center}
+.end-btn{padding:12px 24px;border-radius:12px;font-weight:600;transition:transform .2s}
+.end-btn.secondary{background:rgba(255,255,255,.1);color:white}
+.end-btn.secondary:hover{background:rgba(255,255,255,.2)}
+.end-btn.primary{background:linear-gradient(135deg,var(--sky-500),var(--blue-600));color:white;box-shadow:0 8px 24px rgba(14,165,233,.25)}
+.end-btn.primary:hover{transform:scale(1.05)}
+
+/* ═══════════════════════════════════════════════
+   SCENE COMPONENTS
+   ═══════════════════════════════════════════════ */
+.scene{display:none}
+.scene.active{display:block}
+
+/* Cards */
+.card{border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);padding:16px;backdrop-filter:blur(4px)}
+.card-title{font-size:.8rem;font-weight:600;color:white;margin-bottom:12px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.grid-5-3{display:grid;grid-template-columns:3fr 2fr;gap:16px}
+.max-w{max-width:1200px;margin:0 auto}
+.gap-4{display:flex;flex-direction:column;gap:16px}
+
+/* Stat card */
+.stat-card{border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);padding:16px;text-align:center}
+.stat-card .value{font-size:1.5rem;font-weight:700;margin-bottom:2px}
+.stat-card .label{font-size:.75rem;color:rgba(186,230,253,.6)}
+
+/* Badge */
+.badge{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:.7rem;font-weight:500}
+.badge-green{background:rgba(34,197,94,.2);color:#86efac}
+.badge-red{background:rgba(239,68,68,.2);color:#fca5a5}
+.badge-amber{background:rgba(245,158,11,.2);color:#fcd34d}
+.badge-sky{background:rgba(14,165,233,.2);color:var(--sky-300)}
+.badge-emerald{background:rgba(16,185,129,.2);color:#6ee7b7}
+
+/* Chat bubbles */
+.chat-area{display:flex;flex-direction:column;gap:10px}
+.chat-msg{max-width:85%;padding:10px 16px;border-radius:16px;font-size:.85rem;line-height:1.5}
+.chat-ai{background:rgba(255,255,255,.08);color:rgba(191,219,254,.9);align-self:flex-start;border-bottom-left-radius:4px}
+.chat-user{background:var(--sky-600);color:white;align-self:flex-end;border-bottom-right-radius:4px}
+
+/* Confidence bar */
+.conf-bar-track{height:8px;width:100%;border-radius:4px;background:rgba(255,255,255,.08);margin-top:8px}
+.conf-bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--sky-400),var(--blue-500))}
+
+/* Vital gauge */
+.vital-gauge{border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);padding:12px;text-align:center}
+.vital-gauge .vg-value{font-size:1.6rem;font-weight:700;margin:4px 0}
+.vital-gauge .vg-label{font-size:.7rem;color:rgba(186,230,253,.5);text-transform:uppercase;letter-spacing:.05em}
+.vital-gauge .vg-unit{font-size:.75rem;color:rgba(186,230,253,.4)}
+
+/* Alert banner */
+.alert-banner{border-radius:12px;border:1px solid rgba(239,68,68,.35);background:rgba(239,68,68,.12);padding:16px;display:none;align-items:center;gap:12px}
+.alert-banner.show{display:flex}
+.alert-icon{width:40px;height:40px;border-radius:50%;background:rgba(239,68,68,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.alert-icon svg{width:20px;height:20px;color:var(--red-400)}
+.alert-text strong{display:block;font-size:.85rem;color:#fca5a5;margin-bottom:2px}
+.alert-text span{font-size:.75rem;color:rgba(252,165,165,.6)}
+.alert-ack-btn{margin-left:auto;padding:6px 12px;border-radius:8px;background:rgba(239,68,68,.25);font-size:.75rem;font-weight:500;color:rgba(252,165,165,.8);white-space:nowrap}
+
+/* Table */
+.data-table{width:100%;font-size:.8rem}
+.data-table th{text-align:left;padding:6px 12px 6px 0;border-bottom:1px solid rgba(255,255,255,.08);color:rgba(186,230,253,.5);font-weight:500;font-size:.7rem}
+.data-table td{padding:8px 12px 8px 0;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(226,232,240,.9)}
+.val-normal{color:var(--green-400);font-weight:600;font-family:monospace}
+.val-high{color:var(--red-400);font-weight:600;font-family:monospace}
+.val-low{color:var(--amber-400);font-weight:600;font-family:monospace}
+
+/* AI summary box */
+.ai-summary{border-radius:12px;border:1px solid rgba(14,165,233,.25);background:rgba(14,165,233,.08);padding:16px}
+.ai-summary h4{font-size:.8rem;font-weight:600;color:var(--sky-300);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.ai-summary p{font-size:.85rem;line-height:1.6;color:rgba(186,230,253,.75)}
+.ai-summary strong{color:white}
+
+/* Interaction warning */
+.interaction-card{border-radius:8px;border:1px solid rgba(245,158,11,.25);background:rgba(245,158,11,.08);padding:12px}
+.interaction-card .ic-title{font-size:.8rem;font-weight:600;display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.interaction-card .ic-desc{font-size:.75rem;color:rgba(252,211,77,.7);line-height:1.5}
+
+/* Monitored patient card */
+.mp-card{border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);padding:12px;display:flex;flex-direction:column;gap:8px}
+.mp-card .mp-header{display:flex;align-items:center;justify-content:space-between}
+.mp-card .mp-name{font-size:.85rem;font-weight:600;color:white}
+.mp-card .mp-room{font-size:.7rem;color:rgba(186,230,253,.5)}
+.mp-card .mp-vitals{display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:.75rem}
+.mp-card .mp-vitals span{color:rgba(186,230,253,.6)}
+.mp-card .mp-vitals strong{color:white}
+.status-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.status-dot.critical{background:var(--red-500);box-shadow:0 0 8px rgba(239,68,68,.5)}
+.status-dot.warning{background:var(--amber-500);box-shadow:0 0 8px rgba(245,158,11,.5)}
+.status-dot.stable{background:var(--green-500)}
+
+/* Agent diagram */
+.agent-hub{display:flex;flex-direction:column;align-items:center;gap:24px}
+.orchestrator{border-radius:16px;background:linear-gradient(135deg,var(--sky-500),var(--blue-600));padding:16px 32px;text-align:center;box-shadow:0 8px 32px rgba(14,165,233,.2)}
+.orchestrator h3{font-size:1rem;font-weight:700;color:white}
+.orchestrator p{font-size:.75rem;color:rgba(255,255,255,.7)}
+.agents-row{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
+.agent-node{width:130px;border-radius:12px;padding:12px;text-align:center;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);transition:transform .2s}
+.agent-node:hover{transform:translateY(-4px)}
+.agent-node .an-name{font-size:.8rem;font-weight:600;color:white;margin-bottom:4px;white-space:pre-line}
+.agent-node .an-model{font-size:.65rem;font-weight:500;margin-bottom:6px}
+.agent-node .an-desc{font-size:.65rem;color:rgba(186,230,253,.5);line-height:1.3}
+.connector-line{width:2px;height:24px;background:linear-gradient(180deg,var(--sky-500),rgba(14,165,233,.2))}
+
+/* Closing stats */
+.closing-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:24px}
+.cs-item{text-align:center;border-radius:16px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);padding:24px 16px}
+.cs-item .cs-val{font-size:2rem;font-weight:800;margin-bottom:4px}
+.cs-item .cs-label{font-size:.75rem;color:rgba(186,230,253,.6)}
+
+/* System health row */
+.sh-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.sh-row .sh-name{flex:1;font-size:.8rem;color:white}
+.sh-row .sh-status{font-size:.75rem;font-weight:500;color:var(--green-400)}
+.sh-row .sh-metric{font-size:.7rem;color:rgba(186,230,253,.5);width:80px;text-align:right}
+
+/* Telemedicine mockup */
+.tele-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;height:100%}
+.tele-video{border-radius:12px;background:linear-gradient(135deg,#1e293b,#334155);display:flex;align-items:center;justify-content:center;min-height:300px;position:relative;overflow:hidden}
+.tele-video .camera-icon{width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center}
+.tele-video .camera-icon svg{width:28px;height:28px;color:rgba(255,255,255,.4)}
+.tele-controls{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px}
+.tele-ctrl{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.tele-ctrl.on{background:rgba(255,255,255,.15);color:white}
+.tele-ctrl.off{background:var(--red-500);color:white}
+.tele-sidebar{display:flex;flex-direction:column;gap:12px}
+
+/* Responsive */
+@media(max-width:768px){
+  .grid-4{grid-template-columns:1fr 1fr}
+  .grid-3{grid-template-columns:1fr}
+  .grid-5-3{grid-template-columns:1fr}
+  .tele-grid{grid-template-columns:1fr}
+  .closing-stats{grid-template-columns:1fr 1fr}
+  .agents-row{gap:8px}
+  .agent-node{width:100px}
+  .logo-text h1{font-size:1.8rem}
+  .scene-area{padding:12px 16px}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     START SCREEN
+     ═══════════════════════════════════════════════ -->
+<div id="start-screen">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+  <button class="close-btn" onclick="window.close()" title="Close">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+  <div class="start-content">
+    <div class="logo-row">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      </div>
+      <div class="logo-text">
+        <h1>MedAssist AI</h1>
+        <p>Intelligent Medical Assistant Platform</p>
+      </div>
+    </div>
+    <p class="start-desc">Experience how seven specialized AI agents work together to transform patient care with real-time monitoring, intelligent diagnosis, and clinical decision support.</p>
+    <button class="start-btn" onclick="startDemo()">
+      <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+      Start Product Demo
+    </button>
+    <p class="start-hint">Duration: ~3 minutes &middot; Audio narration &middot; Press ESC to exit</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     PLAYER
+     ═══════════════════════════════════════════════ -->
+<div id="player">
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      </div>
+      <span class="topbar-title">MedAssist AI Demo</span>
+      <span class="scene-badge" id="scene-counter">1 / 11</span>
+    </div>
+    <div class="topbar-right">
+      <button class="ctrl-btn" id="play-pause-btn" onclick="togglePause()">Pause</button>
+      <button class="ctrl-btn" onclick="skipScene()">Skip</button>
+      <button class="ctrl-btn icon-only" onclick="exitDemo()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Scene title -->
+  <div class="scene-title-bar"><h2 id="scene-title">Welcome to MedAssist AI</h2></div>
+
+  <!-- Scene content area -->
+  <div class="scene-area" id="scene-area">
+
+    <!-- SCENE 0: Intro -->
+    <div class="scene" id="scene-0">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:32px">
+        <div class="fade-in-zoom" style="display:flex;align-items:center;gap:16px">
+          <div style="width:96px;height:96px;border-radius:24px;background:linear-gradient(135deg,var(--sky-400),var(--blue-600));display:flex;align-items:center;justify-content:center;box-shadow:0 16px 48px rgba(14,165,233,.3)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" style="width:56px;height:56px"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          </div>
+          <div>
+            <h1 style="font-size:3rem;font-weight:800;color:white">MedAssist AI</h1>
+            <p style="font-size:1.1rem;font-weight:500;color:var(--sky-300)">Intelligent Medical Assistant Platform</p>
+          </div>
+        </div>
+        <div class="grid-4" style="width:100%;max-width:700px">
+          <div class="stat-card"><div class="value" style="color:var(--sky-400)">7</div><div class="label">AI Agents</div></div>
+          <div class="stat-card"><div class="value" style="color:var(--green-400)">24/7</div><div class="label">Monitoring</div></div>
+          <div class="stat-card"><div class="value" style="color:var(--amber-400)">&lt;2s</div><div class="label">Response Time</div></div>
+          <div class="stat-card"><div class="value" style="color:var(--cyan-400)">HIPAA</div><div class="label">Compliance</div></div>
+        </div>
+        <p style="max-width:600px;text-align:center;color:rgba(186,230,253,.5);font-size:1rem">Transforming healthcare with agentic AI for hospitals, telemedicine providers, and health startups worldwide.</p>
+      </div>
+    </div>
+
+    <!-- SCENE 1: Patient Portal -->
+    <div class="scene" id="scene-1">
+      <div class="max-w gap-4">
+        <div class="grid-4">
+          <div class="stat-card"><div class="value" style="color:var(--red-400)">72 <span style="font-size:.7rem;font-weight:400">bpm</span></div><div class="label">Heart Rate</div></div>
+          <div class="stat-card"><div class="value" style="color:var(--blue-500)">120/78</div><div class="label">Blood Pressure</div></div>
+          <div class="stat-card"><div class="value" style="color:var(--cyan-400)">98%</div><div class="label">SpO2</div></div>
+          <div class="stat-card"><div class="value" style="color:var(--green-400)">87</div><div class="label">Health Score</div></div>
+        </div>
+        <div class="grid-3">
+          <div class="card">
+            <div class="card-title">Upcoming Appointments</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px">
+                <div style="font-size:.85rem;font-weight:500;color:white">Dr. Emily Carter</div>
+                <div style="font-size:.7rem;color:rgba(186,230,253,.5)">Mar 22, 10:00 AM &middot; Follow-up</div>
+                <span class="badge badge-sky" style="margin-top:4px">Telemedicine</span>
+              </div>
+              <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px">
+                <div style="font-size:.85rem;font-weight:500;color:white">Dr. M. Thompson</div>
+                <div style="font-size:.7rem;color:rgba(186,230,253,.5)">Mar 28, 2:30 PM &middot; Cardiology</div>
+                <span class="badge badge-emerald" style="margin-top:4px">In-Person</span>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Medication Reminders</div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 10px">
+                <div><div style="font-size:.8rem;font-weight:500;color:white">Lisinopril</div><div style="font-size:.65rem;color:rgba(186,230,253,.5)">10mg &middot; Once daily</div></div>
+                <span class="badge badge-green">Active</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 10px">
+                <div><div style="font-size:.8rem;font-weight:500;color:white">Metformin</div><div style="font-size:.65rem;color:rgba(186,230,253,.5)">500mg &middot; Twice daily</div></div>
+                <span class="badge badge-green">Active</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:8px 10px">
+                <div><div style="font-size:.8rem;font-weight:500;color:white">Atorvastatin</div><div style="font-size:.65rem;color:rgba(186,230,253,.5)">20mg &middot; Once daily</div></div>
+                <span class="badge badge-green">Active</span>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Heart Rate - Last 24h</div>
+            <canvas id="hr-mini-chart" width="340" height="180"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE 2: Symptom Analysis -->
+    <div class="scene" id="scene-2">
+      <div class="max-w" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+            <span class="pulse-dot" style="width:8px;height:8px;border-radius:50%;background:var(--green-400)"></span>
+            <span class="card-title" style="margin:0">AI Symptom Analyst</span>
+          </div>
+          <div class="chat-area" id="chat-area"></div>
+        </div>
+        <div class="gap-4">
+          <div class="card">
+            <div class="card-title">Differential Diagnosis</div>
+            <div id="diagnosis-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          </div>
+          <div style="border-radius:12px;border:1px solid rgba(245,158,11,.25);background:rgba(245,158,11,.08);padding:16px">
+            <div style="font-size:.8rem;font-weight:600;color:var(--amber-300)">Recommended Action</div>
+            <p style="font-size:.8rem;color:rgba(252,211,77,.7);margin-top:4px;line-height:1.5">Schedule a follow-up with your primary care physician within 7 days. Monitor blood pressure daily. Seek immediate care if headache becomes severe or vision changes occur.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE 3: Vitals Monitoring -->
+    <div class="scene" id="scene-3">
+      <div class="max-w gap-4">
+        <div class="alert-banner" id="vitals-alert">
+          <div class="alert-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <div class="alert-text">
+            <strong>CRITICAL ALERT - Room ICU-204</strong>
+            <span>SpO2 dropped to 91% for patient James Wilson. NEWS2 score: 8. Escalating to attending physician.</span>
+          </div>
+          <button class="alert-ack-btn">Acknowledge</button>
+        </div>
+        <div class="grid-4">
+          <div class="vital-gauge"><div class="vg-label">Heart Rate</div><div class="vg-value" style="color:var(--red-400)" id="vg-hr">72</div><div class="vg-unit">bpm</div></div>
+          <div class="vital-gauge"><div class="vg-label">SpO2</div><div class="vg-value" style="color:var(--cyan-400)" id="vg-spo2">97.5</div><div class="vg-unit">%</div></div>
+          <div class="vital-gauge"><div class="vg-label">Blood Pressure</div><div class="vg-value" style="color:var(--blue-500)" id="vg-bp">120/78</div><div class="vg-unit">mmHg</div></div>
+          <div class="vital-gauge"><div class="vg-label">Temperature</div><div class="vg-value" style="color:var(--orange-500)" id="vg-temp">36.7</div><div class="vg-unit">&deg;C</div></div>
+        </div>
+        <div class="grid-2">
+          <div class="card"><div class="card-title">Heart Rate (Live)</div><canvas id="hr-live-chart" width="500" height="160"></canvas></div>
+          <div class="card"><div class="card-title">Oxygen Saturation (Live)</div><canvas id="spo2-live-chart" width="500" height="160"></canvas></div>
+        </div>
+        <div class="card" style="display:flex;align-items:center;gap:16px">
+          <div style="text-align:center"><div style="font-size:.7rem;color:rgba(186,230,253,.5)">NEWS2 Score</div><div style="font-size:2rem;font-weight:700;color:var(--amber-400)">5</div></div>
+          <div style="width:1px;height:48px;background:rgba(255,255,255,.08)"></div>
+          <div><div style="font-size:.85rem;font-weight:500;color:var(--amber-300)">Medium Clinical Risk</div><div style="font-size:.7rem;color:rgba(186,230,253,.5)">Increased frequency of monitoring. Urgent clinical review by ward-based doctor.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE 4: Report Analysis -->
+    <div class="scene" id="scene-4">
+      <div class="max-w grid-5-3">
+        <div class="card">
+          <div class="card-title">Lab Results - Complete Blood Panel</div>
+          <table class="data-table">
+            <thead><tr><th>Test</th><th>Value</th><th>Unit</th><th>Ref Range</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>Hemoglobin</td><td class="val-normal">13.8</td><td>g/dL</td><td>12.0 - 17.5</td><td><span class="badge badge-green">Normal</span></td></tr>
+              <tr><td>WBC Count</td><td class="val-high">11.2</td><td>K/uL</td><td>4.5 - 11.0</td><td><span class="badge badge-red">High</span></td></tr>
+              <tr><td>Platelet Count</td><td class="val-normal">245</td><td>K/uL</td><td>150 - 400</td><td><span class="badge badge-green">Normal</span></td></tr>
+              <tr><td>Glucose (Fasting)</td><td class="val-high">142</td><td>mg/dL</td><td>70 - 100</td><td><span class="badge badge-red">High</span></td></tr>
+              <tr><td>Creatinine</td><td class="val-normal">0.9</td><td>mg/dL</td><td>0.7 - 1.3</td><td><span class="badge badge-green">Normal</span></td></tr>
+              <tr><td>TSH</td><td class="val-low">0.3</td><td>mIU/L</td><td>0.4 - 4.0</td><td><span class="badge badge-amber">Low</span></td></tr>
+              <tr><td>Total Cholesterol</td><td class="val-high">218</td><td>mg/dL</td><td>0 - 200</td><td><span class="badge badge-red">High</span></td></tr>
+              <tr><td>HbA1c</td><td class="val-high">6.8</td><td>%</td><td>0 - 5.7</td><td><span class="badge badge-red">High</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="gap-4">
+          <div class="ai-summary">
+            <h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg> AI Summary</h4>
+            <p>Your lab results show <strong>4 values outside normal range</strong>. Elevated fasting glucose (142 mg/dL) and HbA1c (6.8%) suggest pre-diabetic to early diabetic range. WBC is mildly elevated, which may indicate infection or inflammation. TSH is slightly low.</p>
+          </div>
+          <div class="card">
+            <div class="card-title">Recommended Follow-up</div>
+            <div style="display:flex;flex-direction:column;gap:6px;font-size:.8rem;color:rgba(186,230,253,.6)">
+              <div style="display:flex;gap:8px;align-items:baseline"><span style="width:6px;height:6px;border-radius:50%;background:var(--amber-400);flex-shrink:0;margin-top:6px"></span>Repeat fasting glucose in 2 weeks</div>
+              <div style="display:flex;gap:8px;align-items:baseline"><span style="width:6px;height:6px;border-radius:50%;background:var(--amber-400);flex-shrink:0;margin-top:6px"></span>Thyroid panel follow-up (Free T3, Free T4)</div>
+              <div style="display:flex;gap:8px;align-items:baseline"><span style="width:6px;height:6px;border-radius:50%;background:var(--sky-400);flex-shrink:0;margin-top:6px"></span>LDL/HDL cholesterol breakdown</div>
+              <div style="display:flex;gap:8px;align-items:baseline"><span style="width:6px;height:6px;border-radius:50%;background:var(--sky-400);flex-shrink:0;margin-top:6px"></span>Schedule endocrinology consultation</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE 5: Drug Interaction -->
+    <div class="scene" id="scene-5">
+      <div class="max-w gap-4" style="max-width:900px">
+        <div class="card">
+          <div class="card-title">Active Medications</div>
+          <div class="grid-2">
+            <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:10px">
+              <div><div style="font-size:.8rem;font-weight:500;color:white">Lisinopril</div><div style="font-size:.65rem;color:rgba(186,230,253,.5)">10mg &middot; Once daily</div></div>
+              <span class="badge badge-green">Active</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:10px">
+              <div><div style="font-size:.8rem;font-weight:500;color:white">Metformin</div><div style="font-size:.65rem;color:rgba(186,230,253,.5)">500mg &middot; Twice daily</div></div>
+              <span class="badge badge-green">Active</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:10px">
+              <div><div style="font-size:.8rem;font-weight:500;color:white">Ibuprofen</div><div style="font-size:.65rem;color:rgba(186,230,253,.5)">400mg &middot; As needed</div></div>
+              <span class="badge badge-amber">Review</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border-radius:8px;padding:10px">
+              <div><div style="font-size:.8rem;font-weight:500;color:white">Atorvastatin</div><div style="font-size:.65rem;color:rgba(186,230,253,.5)">20mg &middot; Once daily</div></div>
+              <span class="badge badge-green">Active</span>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="border-color:rgba(245,158,11,.2)">
+          <div class="card-title" style="color:var(--amber-300)">Interactions Detected (2)</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div class="interaction-card">
+              <div class="ic-title" style="color:var(--amber-300)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Lisinopril + Ibuprofen <span class="badge badge-amber" style="margin-left:8px">Moderate</span></div>
+              <div class="ic-desc">NSAIDs may reduce antihypertensive effect and increase risk of renal impairment</div>
+            </div>
+            <div class="interaction-card" style="border-color:rgba(34,197,94,.2);background:rgba(34,197,94,.05)">
+              <div class="ic-title" style="color:var(--green-400)">Metformin + Ibuprofen <span class="badge badge-green" style="margin-left:8px">Mild</span></div>
+              <div class="ic-desc" style="color:rgba(134,239,172,.6)">NSAIDs may rarely increase the risk of lactic acidosis with metformin</div>
+            </div>
+          </div>
+        </div>
+        <div class="ai-summary">
+          <h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg> AI Recommendation</h4>
+          <p>Consider replacing <strong>Ibuprofen</strong> with <strong>Acetaminophen (Tylenol)</strong> for pain management to avoid interaction with Lisinopril. If NSAID is required, monitor renal function and blood pressure closely.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE 6: Doctor Dashboard -->
+    <div class="scene" id="scene-6">
+      <div class="max-w gap-4">
+        <div class="card-title" style="color:white;font-size:1rem">Monitoring Wall - ICU & Medical Units</div>
+        <div class="grid-3" id="patient-wall"></div>
+        <div class="card">
+          <div class="card-title">Alert Feed</div>
+          <div style="display:flex;flex-direction:column;gap:6px" id="alert-feed"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE 7: Telemedicine -->
+    <div class="scene" id="scene-7">
+      <div class="max-w tele-grid" style="min-height:400px">
+        <div class="tele-video">
+          <div class="camera-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>
+          <div style="position:absolute;top:16px;left:16px;display:flex;align-items:center;gap:8px">
+            <span class="pulse-dot" style="width:8px;height:8px;border-radius:50%;background:var(--red-500)"></span>
+            <span style="font-size:.75rem;color:white;font-weight:500">LIVE - Dr. Emily Carter</span>
+          </div>
+          <div style="position:absolute;bottom:60px;right:16px;width:120px;height:80px;border-radius:8px;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center">
+            <span style="font-size:.65rem;color:rgba(255,255,255,.5)">You</span>
+          </div>
+          <div class="tele-controls">
+            <div class="tele-ctrl on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg></div>
+            <div class="tele-ctrl on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>
+            <div class="tele-ctrl on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+            <div class="tele-ctrl off"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6"/></svg></div>
+          </div>
+        </div>
+        <div class="tele-sidebar">
+          <div class="card" style="flex:1">
+            <div class="card-title">AI Transcription (Live)</div>
+            <div style="font-size:.8rem;color:rgba(186,230,253,.7);line-height:1.6">
+              <p style="margin-bottom:8px"><strong style="color:var(--sky-300)">Dr. Carter:</strong> Looking at your recent lab work, your HbA1c is at 6.8% which is slightly above normal range.</p>
+              <p style="margin-bottom:8px"><strong style="color:white">Patient:</strong> Is that concerning? My previous test was 6.2%.</p>
+              <p><strong style="color:var(--sky-300)">Dr. Carter:</strong> It shows a trend we want to address early. I'd recommend we adjust your Metformin dosage and add dietary modifications...</p>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">AI Clinical Notes (Generating...)</div>
+            <div style="font-size:.75rem;color:rgba(186,230,253,.5)">
+              <p><strong style="color:white">S:</strong> Patient reports increased thirst and fatigue over past 2 weeks.</p>
+              <p style="margin-top:4px"><strong style="color:white">O:</strong> HbA1c 6.8% (up from 6.2%). BP 128/82.</p>
+              <p style="margin-top:4px"><strong style="color:white">A:</strong> Pre-diabetes trending toward type 2 DM.</p>
+              <p style="margin-top:4px"><strong style="color:white">P:</strong> Increase Metformin, dietary counseling, follow-up in 6 weeks.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE 8: Admin & Compliance -->
+    <div class="scene" id="scene-8">
+      <div class="max-w" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="gap-4">
+          <div class="card">
+            <div class="card-title">System Health</div>
+            <div id="system-health-list"></div>
+          </div>
+          <div class="card" style="text-align:center">
+            <div class="card-title">Compliance Score</div>
+            <div style="font-size:3rem;font-weight:800;color:var(--green-400)">98.5%</div>
+            <div style="font-size:.75rem;color:rgba(186,230,253,.5)">HIPAA Compliance Rating</div>
+            <div style="margin-top:12px;display:flex;gap:8px;justify-content:center">
+              <span class="badge badge-green">Encryption: AES-256</span>
+              <span class="badge badge-green">TLS 1.3</span>
+              <span class="badge badge-green">RBAC Active</span>
+            </div>
+          </div>
+        </div>
+        <div class="gap-4">
+          <div class="card">
+            <div class="card-title">HIPAA Audit Log (Real-Time)</div>
+            <table class="data-table">
+              <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Resource</th><th>Status</th></tr></thead>
+              <tbody id="audit-log-body"></tbody>
+            </table>
+          </div>
+          <div class="card">
+            <div class="card-title">AI Usage by Agent (This Month)</div>
+            <canvas id="usage-pie-chart" width="300" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE 9: AI Agents -->
+    <div class="scene" id="scene-9">
+      <div class="max-w agent-hub">
+        <div class="orchestrator">
+          <h3>Agent Orchestrator</h3>
+          <p>GPT-4o with Function Calling &middot; Routes tasks to specialist agents</p>
+        </div>
+        <div class="connector-line"></div>
+        <div class="agents-row" id="agents-row"></div>
+        <div class="card" style="max-width:600px;width:100%;text-align:center">
+          <div class="card-title">Shared Memory & Context</div>
+          <div style="display:flex;justify-content:center;gap:24px;font-size:.8rem">
+            <div><div style="color:var(--sky-400);font-weight:600">Redis</div><div style="color:rgba(186,230,253,.5)">Short-term context (30 min TTL)</div></div>
+            <div style="width:1px;background:rgba(255,255,255,.1)"></div>
+            <div><div style="color:var(--purple-500);font-weight:600">Pinecone</div><div style="color:rgba(186,230,253,.5)">Long-term patient knowledge</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE 10: Closing -->
+    <div class="scene" id="scene-10">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:32px">
+        <div style="display:flex;align-items:center;gap:16px">
+          <div style="width:80px;height:80px;border-radius:20px;background:linear-gradient(135deg,var(--sky-400),var(--blue-600));display:flex;align-items:center;justify-content:center;box-shadow:0 12px 40px rgba(14,165,233,.3)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" style="width:44px;height:44px"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          </div>
+          <div>
+            <h1 style="font-size:2.5rem;font-weight:800;color:white">MedAssist AI</h1>
+            <p style="font-size:1rem;color:var(--sky-300)">Transforming Healthcare with Intelligent AI</p>
+          </div>
+        </div>
+        <div class="closing-stats">
+          <div class="cs-item"><div class="cs-val" style="color:var(--sky-400)">7</div><div class="cs-label">Specialized AI Agents</div></div>
+          <div class="cs-item"><div class="cs-val" style="color:var(--green-400)">24/7</div><div class="cs-label">Continuous Monitoring</div></div>
+          <div class="cs-item"><div class="cs-val" style="color:var(--amber-400)">40+</div><div class="cs-label">AI Models Available</div></div>
+          <div class="cs-item"><div class="cs-val" style="color:var(--cyan-400)">100%</div><div class="cs-label">HIPAA Compliant</div></div>
+        </div>
+        <p style="max-width:500px;text-align:center;color:rgba(186,230,253,.6);font-size:1rem;line-height:1.6">Ready to transform care delivery at your organization? Contact us for a personalized live demo.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Caption bar -->
+  <div class="caption-bar"><p class="caption-text" id="caption"></p></div>
+
+  <!-- Progress bar -->
+  <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+
+  <!-- End overlay -->
+  <div class="end-overlay" id="end-overlay">
+    <div class="end-content">
+      <div style="width:80px;height:80px;border-radius:20px;background:linear-gradient(135deg,var(--sky-400),var(--blue-600));display:flex;align-items:center;justify-content:center;margin:0 auto;box-shadow:0 12px 40px rgba(14,165,233,.3)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" style="width:44px;height:44px"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      </div>
+      <h2>Thank You for Watching</h2>
+      <p>Ready to transform care delivery at your organization?</p>
+      <div class="end-btns">
+        <button class="end-btn secondary" onclick="replayDemo()">Replay Demo</button>
+        <button class="end-btn primary" onclick="exitDemo()">Back to Login</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   DEMO SCRIPT DATA
+   ═══════════════════════════════════════════════ */
+const SCENES = [
+  { id: "intro", title: "Welcome to MedAssist AI", narration: "Welcome to MedAssist AI, the intelligent medical assistant platform that transforms patient care with AI-powered monitoring, diagnosis support, and real-time clinical insights. Built for hospitals, telemedicine providers, and health startups, MedAssist AI brings the future of healthcare to your organization today.", durationMs: 16000 },
+  { id: "patient-portal", title: "Patient Portal", narration: "Patients access their personalized health dashboard to track vitals, manage medications, view AI-analyzed medical reports, and communicate with their care team. All from one secure, HIPAA-compliant portal. Appointments, medication reminders, and real-time health scores keep patients engaged in their own care journey.", durationMs: 21000 },
+  { id: "symptom-analysis", title: "AI Symptom Analysis", narration: "Our AI Symptom Analyst conducts intelligent multi-turn interviews, generating differential diagnoses with confidence scores and urgency assessments. It considers patient history, allergies, and medications for personalized analysis. The system uses GPT-4o with retrieval-augmented generation to ground every recommendation in verified medical literature.", durationMs: 22000 },
+  { id: "vitals-monitoring", title: "Real-Time Vitals Monitoring", narration: "The Patient Monitoring Agent provides twenty-four seven real-time vitals surveillance. Adaptive baselines learn each patient's normal ranges. AI-powered anomaly detection triggers alerts thirty to sixty minutes before potential deterioration, with automatic escalation chains from nurse to attending physician to on-call specialist.", durationMs: 22000 },
+  { id: "report-analysis", title: "Medical Report Analysis", narration: "Upload any medical report, whether lab results, imaging, or pathology, and our Report Reader Agent extracts values, identifies abnormalities, and generates both clinical summaries for doctors and plain-language explanations for patients. Trend analysis compares results across time for complete clinical context.", durationMs: 18000 },
+  { id: "drug-interaction", title: "Drug Interaction Checking", narration: "Real-time drug interaction checking analyzes every prescription against the patient's full medication list, allergies, and conditions, flagging conflicts before they reach the patient. The system suggests safer alternatives and optimized dosing schedules automatically.", durationMs: 14000 },
+  { id: "doctor-dashboard", title: "Doctor Dashboard", narration: "Doctors get a powerful command center with real-time monitoring walls, AI-assisted clinical notes, priority patient queues, and intelligent decision support. Every insight is evidence-based with source citations. Color-coded patient cards and alert feeds ensure critical situations are never missed.", durationMs: 21000 },
+  { id: "telemedicine", title: "Telemedicine", narration: "Integrated telemedicine features HD video consultations, real-time transcription powered by OpenAI Whisper, and AI-generated SOAP notes after every consultation. Screen sharing enables collaborative report review during calls.", durationMs: 13000 },
+  { id: "admin-compliance", title: "Admin & Compliance", narration: "Full HIPAA compliance is built in from the ground up. Encrypted data at rest and in transit, comprehensive audit logging, role-based access control, and automated compliance reporting give your compliance team complete peace of mind. Every access to protected health information is tracked and auditable.", durationMs: 18000 },
+  { id: "ai-agents", title: "AI Agent Ecosystem", narration: "Seven specialized AI agents work together through our intelligent orchestrator. The Symptom Analyst, Report Reader, Triage, Voice, Drug Interaction, Monitoring, and Follow-Up agents deliver coordinated, context-aware care. Each agent has its own tools, memory, and decision-making capabilities, collaborating autonomously for optimal patient outcomes.", durationMs: 20000 },
+  { id: "closing", title: "Transform Healthcare Today", narration: "MedAssist AI. Seven specialized AI agents. Twenty-four seven monitoring. Full HIPAA compliance. Transforming healthcare with intelligent, agentic AI. Ready to see it in action? Contact us for a live demo and discover how MedAssist AI can revolutionize care delivery at your organization.", durationMs: 16000 },
+];
+
+const CHAT_MSGS = [
+  { role: "ai", text: "Hello! I'm your AI Symptom Analyst. What symptoms are you experiencing today?" },
+  { role: "user", text: "I've been having persistent headaches for the past 3 days, mostly on the right side. Also feeling a bit dizzy when I stand up." },
+  { role: "ai", text: "Can you describe the pain? Is it throbbing, sharp, or a dull pressure? And on a scale of 1-10, how severe is it?" },
+  { role: "user", text: "It's a throbbing pain, about 6 out of 10. Gets worse in the afternoon." },
+  { role: "ai", text: "Thank you. Given your symptoms, history of mild hypertension, and current medications, I've completed my analysis." },
+];
+
+const DIAGNOSES = [
+  { condition: "Tension-type Headache", confidence: 72, urgency: "Low" },
+  { condition: "Migraine without Aura", confidence: 58, urgency: "Low" },
+  { condition: "Hypertension-related Headache", confidence: 45, urgency: "Medium" },
+  { condition: "Cervicogenic Headache", confidence: 31, urgency: "Low" },
+];
+
+const PATIENTS = [
+  { name: "James Wilson", age: 68, room: "ICU-204", status: "critical", hr: 112, bp: "165/98", spo2: 91, news2: 8 },
+  { name: "Sarah Chen", age: 45, room: "CCU-112", status: "warning", hr: 98, bp: "148/92", spo2: 94, news2: 5 },
+  { name: "Robert Davis", age: 72, room: "ICU-207", status: "stable", hr: 76, bp: "128/82", spo2: 97, news2: 2 },
+  { name: "Maria Garcia", age: 56, room: "MED-315", status: "stable", hr: 82, bp: "132/84", spo2: 98, news2: 1 },
+  { name: "Thomas Brown", age: 61, room: "ICU-201", status: "warning", hr: 104, bp: "155/95", spo2: 93, news2: 6 },
+  { name: "Linda Martinez", age: 39, room: "MED-308", status: "stable", hr: 70, bp: "118/76", spo2: 99, news2: 0 },
+];
+
+const AGENTS = [
+  { name: "Symptom\nAnalyst", model: "GPT-4o", color: "#0EA5E9", desc: "Multi-turn symptom interviews & differential diagnosis" },
+  { name: "Report\nReader", model: "GPT-4o Vision", color: "#8B5CF6", desc: "Medical report parsing & abnormality detection" },
+  { name: "Triage", model: "GPT-4o-mini", color: "#EF4444", desc: "Emergency severity scoring & priority routing" },
+  { name: "Voice", model: "Whisper+TTS", color: "#14B8A6", desc: "Speech-to-text & voice interaction" },
+  { name: "Drug\nInteraction", model: "GPT-4o-mini", color: "#F97316", desc: "Medication conflict detection" },
+  { name: "Monitoring", model: "GPT-4o-mini", color: "#22C55E", desc: "Vitals anomaly & early warning" },
+  { name: "Follow-Up", model: "GPT-4o", color: "#EC4899", desc: "Care plan & adherence tracking" },
+];
+
+const HEALTH = [
+  { service: "PostgreSQL 16", uptime: "99.99%", latency: "2ms" },
+  { service: "Redis 7", uptime: "99.99%", latency: "<1ms" },
+  { service: "InfluxDB", uptime: "99.97%", latency: "5ms" },
+  { service: "OpenAI API", uptime: "99.95%", latency: "320ms" },
+  { service: "Pinecone", uptime: "99.98%", latency: "45ms" },
+  { service: "Celery Workers", uptime: "99.99%", latency: "—" },
+];
+
+const AUDIT = [
+  { time: "14:32:07", user: "Dr. Emily Carter", action: "View Patient Record", resource: "Patient #4821", status: "Success" },
+  { time: "14:31:45", user: "Nurse J. Williams", action: "Update Vitals", resource: "Patient #3156", status: "Success" },
+  { time: "14:30:22", user: "Dr. M. Thompson", action: "Prescribe Medication", resource: "Patient #4821", status: "Success" },
+  { time: "14:29:58", user: "Admin R. Chen", action: "Export Audit Logs", resource: "System", status: "Success" },
+  { time: "14:28:33", user: "Dr. Emily Carter", action: "View Lab Results", resource: "Patient #2847", status: "Success" },
+  { time: "14:27:11", user: "patient2847@mail.com", action: "Access Denied", resource: "Patient #4821", status: "Denied" },
+];
+
+const PIE_DATA = [
+  { name: "Symptom Analysis", value: 35, color: "#0EA5E9" },
+  { name: "Report Reading", value: 25, color: "#8B5CF6" },
+  { name: "Triage", value: 15, color: "#EF4444" },
+  { name: "Drug Checks", value: 12, color: "#F97316" },
+  { name: "Monitoring", value: 8, color: "#22C55E" },
+  { name: "Other", value: 5, color: "#94A3B8" },
+];
+
+/* ═══════════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════════ */
+let currentScene = 0;
+let playing = false;
+let sceneTimer = null;
+let progressInterval = null;
+let sceneStartTime = 0;
+let vitalsInterval = null;
+let vitalsData = [];
+let vitalsOffset = 0;
+
+const totalDuration = SCENES.reduce((s, sc) => s + sc.durationMs, 0);
+function cumulativeDuration(idx) { let s = 0; for (let i = 0; i < idx; i++) s += SCENES[i].durationMs; return s; }
+
+/* ═══════════════════════════════════════════════
+   CANVAS CHART HELPERS
+   ═══════════════════════════════════════════════ */
+function generateVitals(count, offset) {
+  const data = [];
+  for (let i = 0; i < count; i++) {
+    const t = i + offset;
+    data.push({
+      hr: 72 + Math.sin(t * 0.3) * 8 + Math.random() * 4,
+      systolic: 120 + Math.sin(t * 0.2) * 10 + Math.random() * 5,
+      diastolic: 78 + Math.sin(t * 0.25) * 6 + Math.random() * 3,
+      spo2: 97.5 + Math.sin(t * 0.15) * 1.2 + Math.random() * 0.5,
+      temp: 36.7 + Math.sin(t * 0.1) * 0.3 + Math.random() * 0.1,
+    });
+  }
+  return data;
+}
+
+function drawLineChart(canvas, data, key, color, yMin, yMax, refLines) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width, h = canvas.height;
+  const pad = { top: 10, right: 10, bottom: 20, left: 35 };
+  const cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Grid
+  ctx.strokeStyle = "rgba(255,255,255,0.05)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (ch / 4) * i;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
+  }
+
+  // Reference lines
+  if (refLines) {
+    ctx.strokeStyle = "rgba(239,68,68,0.3)";
+    ctx.setLineDash([4, 4]);
+    for (const rl of refLines) {
+      const y = pad.top + ch - ((rl - yMin) / (yMax - yMin)) * ch;
+      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  // Y-axis labels
+  ctx.fillStyle = "rgba(255,255,255,0.3)";
+  ctx.font = "9px sans-serif";
+  ctx.textAlign = "right";
+  for (let i = 0; i <= 4; i++) {
+    const val = yMin + ((yMax - yMin) / 4) * (4 - i);
+    const y = pad.top + (ch / 4) * i;
+    ctx.fillText(val.toFixed(0), pad.left - 4, y + 3);
+  }
+
+  // Data line
+  if (data.length < 2) return;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i < data.length; i++) {
+    const x = pad.left + (i / (data.length - 1)) * cw;
+    const y = pad.top + ch - ((data[i][key] - yMin) / (yMax - yMin)) * ch;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Gradient fill
+  const last = data.length - 1;
+  ctx.lineTo(pad.left + cw, pad.top + ch);
+  ctx.lineTo(pad.left, pad.top + ch);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + ch);
+  grad.addColorStop(0, color.replace(")", ",0.2)").replace("rgb", "rgba"));
+  grad.addColorStop(1, color.replace(")", ",0)").replace("rgb", "rgba"));
+  ctx.fillStyle = grad;
+  ctx.fill();
+}
+
+function drawPieChart(canvas, data) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width, h = canvas.height;
+  const cx = w * 0.35, cy = h / 2, r = Math.min(w * 0.3, h * 0.4);
+  const total = data.reduce((s, d) => s + d.value, 0);
+
+  ctx.clearRect(0, 0, w, h);
+  let angle = -Math.PI / 2;
+  data.forEach((d) => {
+    const slice = (d.value / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, angle, angle + slice);
+    ctx.closePath();
+    ctx.fillStyle = d.color;
+    ctx.fill();
+    angle += slice;
+  });
+
+  // Legend
+  const lx = w * 0.65, ly = 20;
+  ctx.font = "11px sans-serif";
+  data.forEach((d, i) => {
+    const y = ly + i * 22;
+    ctx.fillStyle = d.color;
+    ctx.fillRect(lx, y, 10, 10);
+    ctx.fillStyle = "rgba(226,232,240,0.8)";
+    ctx.textAlign = "left";
+    ctx.fillText(`${d.name} (${d.value}%)`, lx + 16, y + 9);
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   POPULATE STATIC ELEMENTS
+   ═══════════════════════════════════════════════ */
+function populateStaticContent() {
+  // Patient wall
+  const wallEl = document.getElementById("patient-wall");
+  wallEl.innerHTML = PATIENTS.map(p => `
+    <div class="mp-card">
+      <div class="mp-header">
+        <div><div class="mp-name">${p.name}</div><div class="mp-room">Room ${p.room} &middot; Age ${p.age}</div></div>
+        <span class="status-dot ${p.status}"></span>
+      </div>
+      <div class="mp-vitals">
+        <span>HR: <strong style="color:${p.status === 'critical' ? 'var(--red-400)' : 'white'}">${p.hr}</strong> bpm</span>
+        <span>BP: <strong>${p.bp}</strong></span>
+        <span>SpO2: <strong style="color:${p.spo2 < 93 ? 'var(--red-400)' : p.spo2 < 95 ? 'var(--amber-400)' : 'white'}">${p.spo2}%</strong></span>
+        <span>NEWS2: <strong style="color:${p.news2 >= 7 ? 'var(--red-400)' : p.news2 >= 5 ? 'var(--amber-400)' : 'var(--green-400)'}">${p.news2}</strong></span>
+      </div>
+    </div>
+  `).join("");
+
+  // Alert feed
+  const feedEl = document.getElementById("alert-feed");
+  feedEl.innerHTML = [
+    { time: "14:32", sev: "critical", msg: "SpO2 91% — James Wilson (ICU-204). NEWS2: 8. Escalated to Dr. Thompson." },
+    { time: "14:28", sev: "warning", msg: "HR 104 bpm — Thomas Brown (ICU-201). NEWS2: 6. Nurse notified." },
+    { time: "14:15", sev: "resolved", msg: "BP normalized — Sarah Chen (CCU-112). Alert resolved by Nurse Williams." },
+  ].map(a => `
+    <div style="display:flex;gap:8px;align-items:center;padding:8px;border-radius:8px;background:rgba(255,255,255,.03)">
+      <span style="font-size:.7rem;color:rgba(186,230,253,.4);width:40px">${a.time}</span>
+      <span class="badge ${a.sev === 'critical' ? 'badge-red' : a.sev === 'warning' ? 'badge-amber' : 'badge-green'}" style="width:60px;text-align:center">${a.sev}</span>
+      <span style="font-size:.75rem;color:rgba(226,232,240,.7);flex:1">${a.msg}</span>
+    </div>
+  `).join("");
+
+  // System health
+  const shEl = document.getElementById("system-health-list");
+  shEl.innerHTML = HEALTH.map(h => `
+    <div class="sh-row">
+      <span style="width:8px;height:8px;border-radius:50%;background:var(--green-500)"></span>
+      <span class="sh-name">${h.service}</span>
+      <span class="sh-status">Healthy</span>
+      <span class="sh-metric">${h.uptime}</span>
+      <span class="sh-metric">${h.latency}</span>
+    </div>
+  `).join("");
+
+  // Audit log
+  const auditEl = document.getElementById("audit-log-body");
+  auditEl.innerHTML = AUDIT.map(a => `
+    <tr>
+      <td style="font-family:monospace;font-size:.7rem">${a.time}</td>
+      <td>${a.user}</td>
+      <td>${a.action}</td>
+      <td>${a.resource}</td>
+      <td><span class="badge ${a.status === 'Success' ? 'badge-green' : 'badge-red'}">${a.status}</span></td>
+    </tr>
+  `).join("");
+
+  // Agents
+  const agentsEl = document.getElementById("agents-row");
+  agentsEl.innerHTML = AGENTS.map(a => `
+    <div class="agent-node" style="border-color:${a.color}33">
+      <div class="an-name">${a.name}</div>
+      <div class="an-model" style="color:${a.color}">${a.model}</div>
+      <div class="an-desc">${a.desc}</div>
+    </div>
+  `).join("");
+
+  // Diagnosis list
+  const diagEl = document.getElementById("diagnosis-list");
+  diagEl.innerHTML = DIAGNOSES.map(d => `
+    <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:.8rem;font-weight:500;color:white">${d.condition}</span>
+        <span class="badge ${d.urgency === 'Medium' ? 'badge-amber' : 'badge-green'}">${d.urgency}</span>
+      </div>
+      <div class="conf-bar-track"><div class="conf-bar-fill" style="width:${d.confidence}%"></div></div>
+      <div style="font-size:.7rem;color:rgba(186,230,253,.5);margin-top:4px">Confidence: ${d.confidence}%</div>
+    </div>
+  `).join("");
+}
+
+/* ═══════════════════════════════════════════════
+   SPEECH SYNTHESIS
+   ═══════════════════════════════════════════════ */
+function speak(text, onEnd) {
+  speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.rate = 0.95; utt.pitch = 1.0; utt.volume = 1.0;
+  const voices = speechSynthesis.getVoices();
+  const preferred = voices.find(v => v.lang.startsWith("en") && (v.name.includes("Female") || v.name.includes("Samantha") || v.name.includes("Microsoft Zira") || v.name.includes("Google UK English Female") || v.name.includes("Karen")));
+  const fallback = voices.find(v => v.lang.startsWith("en"));
+  if (preferred) utt.voice = preferred; else if (fallback) utt.voice = fallback;
+
+  utt.onboundary = (e) => {
+    if (e.name === "word") document.getElementById("caption").textContent = text.slice(0, e.charIndex + e.charLength);
+  };
+  utt.onend = () => { document.getElementById("caption").textContent = text; if (onEnd) onEnd(); };
+  speechSynthesis.speak(utt);
+}
+
+/* ═══════════════════════════════════════════════
+   SCENE MANAGEMENT
+   ═══════════════════════════════════════════════ */
+function showScene(idx) {
+  document.querySelectorAll(".scene").forEach((el, i) => {
+    el.classList.toggle("active", i === idx);
+  });
+  document.getElementById("scene-title").textContent = SCENES[idx].title;
+  document.getElementById("scene-counter").textContent = `${idx + 1} / ${SCENES.length}`;
+
+  // Scene-specific animations
+  if (idx === 2) animateChat();
+  if (idx === 3) startVitalsAnimation();
+  if (idx === 8) drawPieChart(document.getElementById("usage-pie-chart"), PIE_DATA);
+  if (idx === 1) drawLineChart(document.getElementById("hr-mini-chart"), generateVitals(24, 0), "hr", "rgb(239,68,68)", 55, 95, [60, 100]);
+}
+
+function playScene(idx) {
+  if (idx >= SCENES.length) { endDemo(); return; }
+  currentScene = idx;
+  showScene(idx);
+  sceneStartTime = Date.now();
+  document.getElementById("caption").textContent = "";
+  document.getElementById("vitals-alert").classList.remove("show");
+
+  speak(SCENES[idx].narration, () => {
+    sceneTimer = setTimeout(() => advanceScene(), 1200);
+  });
+
+  if (SCENES[idx].id === "vitals-monitoring") {
+    setTimeout(() => document.getElementById("vitals-alert").classList.add("show"), 8000);
+  }
+
+  startProgress();
+}
+
+function advanceScene() {
+  clearTimeout(sceneTimer);
+  stopVitalsAnimation();
+  currentScene++;
+  if (currentScene >= SCENES.length) { endDemo(); return; }
+  playScene(currentScene);
+}
+
+function skipScene() { speechSynthesis.cancel(); clearTimeout(sceneTimer); advanceScene(); }
+
+function togglePause() {
+  if (playing) {
+    speechSynthesis.pause(); playing = false;
+    document.getElementById("play-pause-btn").textContent = "Resume";
+    clearTimeout(sceneTimer); clearInterval(progressInterval);
+  } else {
+    speechSynthesis.resume(); playing = true;
+    document.getElementById("play-pause-btn").textContent = "Pause";
+    startProgress();
+  }
+}
+
+function startProgress() {
+  clearInterval(progressInterval);
+  progressInterval = setInterval(() => {
+    const elapsed = cumulativeDuration(currentScene) + (Date.now() - sceneStartTime);
+    const pct = Math.min((elapsed / totalDuration) * 100, 100);
+    document.getElementById("progress-fill").style.width = pct + "%";
+  }, 100);
+}
+
+function endDemo() {
+  playing = false;
+  clearInterval(progressInterval);
+  stopVitalsAnimation();
+  document.getElementById("progress-fill").style.width = "100%";
+  document.getElementById("end-overlay").classList.add("active");
+}
+
+function replayDemo() {
+  document.getElementById("end-overlay").classList.remove("active");
+  currentScene = 0;
+  playing = true;
+  document.getElementById("progress-fill").style.width = "0%";
+  document.getElementById("play-pause-btn").textContent = "Pause";
+  playScene(0);
+}
+
+function startDemo() {
+  document.getElementById("start-screen").style.opacity = "0";
+  setTimeout(() => {
+    document.getElementById("start-screen").style.display = "none";
+    document.getElementById("player").classList.add("active");
+    playing = true;
+    speechSynthesis.getVoices();
+    populateStaticContent();
+    playScene(0);
+  }, 500);
+}
+
+function exitDemo() {
+  speechSynthesis.cancel();
+  clearTimeout(sceneTimer);
+  clearInterval(progressInterval);
+  stopVitalsAnimation();
+  // If opened from main app, go back; else just show start screen
+  if (window.opener || document.referrer) {
+    window.history.back();
+  } else {
+    document.getElementById("player").classList.remove("active");
+    document.getElementById("end-overlay").classList.remove("active");
+    document.getElementById("start-screen").style.display = "flex";
+    document.getElementById("start-screen").style.opacity = "1";
+    playing = false; currentScene = 0;
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   CHAT ANIMATION (Scene 2)
+   ═══════════════════════════════════════════════ */
+function animateChat() {
+  const area = document.getElementById("chat-area");
+  area.innerHTML = "";
+  CHAT_MSGS.forEach((msg, i) => {
+    setTimeout(() => {
+      const div = document.createElement("div");
+      div.className = `chat-msg ${msg.role === "user" ? "chat-user" : "chat-ai"} chat-in`;
+      div.textContent = msg.text;
+      area.appendChild(div);
+      area.scrollTop = area.scrollHeight;
+    }, i * 2800);
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   VITALS ANIMATION (Scene 3)
+   ═══════════════════════════════════════════════ */
+function startVitalsAnimation() {
+  vitalsData = generateVitals(24, 0);
+  vitalsOffset = 24;
+  updateVitalsDisplay();
+  vitalsInterval = setInterval(() => {
+    vitalsOffset++;
+    vitalsData = [...vitalsData.slice(1), generateVitals(1, vitalsOffset)[0]];
+    updateVitalsDisplay();
+  }, 1500);
+}
+
+function updateVitalsDisplay() {
+  const last = vitalsData[vitalsData.length - 1];
+  document.getElementById("vg-hr").textContent = Math.round(last.hr);
+  document.getElementById("vg-spo2").textContent = last.spo2.toFixed(1);
+  document.getElementById("vg-bp").textContent = `${Math.round(last.systolic)}/${Math.round(last.diastolic)}`;
+  document.getElementById("vg-temp").textContent = last.temp.toFixed(1);
+  drawLineChart(document.getElementById("hr-live-chart"), vitalsData, "hr", "rgb(239,68,68)", 55, 95, [60, 100]);
+  drawLineChart(document.getElementById("spo2-live-chart"), vitalsData, "spo2", "rgb(6,182,212)", 92, 100, [95]);
+}
+
+function stopVitalsAnimation() { clearInterval(vitalsInterval); }
+
+/* ═══════════════════════════════════════════════
+   KEYBOARD SHORTCUTS
+   ═══════════════════════════════════════════════ */
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") exitDemo();
+  if (e.key === " " && playing !== undefined) { e.preventDefault(); togglePause(); }
+  if (e.key === "ArrowRight") skipScene();
+});
+
+// Warm up voices
+speechSynthesis.getVoices();
+window.addEventListener("load", () => speechSynthesis.getVoices());
+</script>
+</body>
+</html>
