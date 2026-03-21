@@ -1,9 +1,46 @@
-# MedAssist AI — Team Simulation Plan
+# MedAssist AI — Team Development Tracker
 
-> **Purpose:** PK (project lead) is simulating all 5 team developers to learn the full corporate workflow — branching, coding, PRs, code review, and merging. This document is the source of truth across all Claude sessions.
+> **Purpose:** PK (project lead) is coordinating team development AND simulating additional developers to learn the full corporate workflow — branching, coding, PRs, code review, and merging. This document is the source of truth across all Claude sessions.
 >
 > **Date Started:** 2026-03-20
 > **Lead:** PK (pkpcconnect2026@gmail.com / GitHub: pkpcconnect2026-code)
+
+---
+
+## Repository Collaborators (Real Team)
+
+| GitHub Username | Role | Access Level | Status |
+|----------------|------|-------------|--------|
+| `euronone` | Org admin | Admin | Active |
+| `pkpcconnect2026-code` | Project lead (PK) | Write | Active — pushing code |
+| `SKME20417` (Sanjay Kumar) | Backend developer | Write | Active — PR #2 open |
+| `euron-tech` | Team member | Write | No commits yet |
+
+---
+
+## Git History (What Has Happened So Far)
+
+| Date | PR # | Branch | Author | Title | Status |
+|------|------|--------|--------|-------|--------|
+| 2026-03-17 | #1 | `chore/docs/update-learningguide-accuracy` | PK | Project scaffold (Flask, Next.js, Docker, CI, 25 rules, docs) | MERGED |
+| 2026-03-20 | #2 | `feature/backend/patient-doctor-api` | **Sanjay Kumar** | Patient & Doctor CRUD API (FastAPI + Supabase) | OPEN — needs review |
+| 2026-03-21 | #3 | `chore/docs/team-simulation-plan` | PK | This plan document | MERGED |
+
+### CRITICAL ISSUE WITH PR #2 (Sanjay's Code)
+
+Sanjay's PR has **major problems** that PK must address as lead:
+
+1. **Wrong framework:** He used **FastAPI** instead of **Flask** (project standard is Flask per CLAUDE.md and rules/02-backend.md)
+2. **Wrong database:** He used **Supabase** instead of local **PostgreSQL** (project uses Docker Compose PostgreSQL)
+3. **Committed __pycache__/ and binary files** — should be in .gitignore
+4. **Overwrites existing scaffold files** — his branch diverges significantly from main
+
+**Lead Action Required:**
+- Review PR #2, leave comments explaining the issues
+- Request changes or close the PR
+- Guide Sanjay to redo using Flask (or PK simulates the correct version)
+
+This is a **real-world scenario** — team members sometimes go off-spec. The lead's job is to catch this in code review.
 
 ---
 
@@ -13,52 +50,61 @@
 2. Each "developer" creates a feature branch, writes code, pushes, and opens a PR
 3. PK (as lead) reviews and merges each PR in order
 4. Everything follows the CONTRIBUTING.md workflow exactly — same as a real team
+5. For real team members (Sanjay, euron-tech), PK reviews their actual PRs
 
 ---
 
-## The Team (Simulated)
+## Developer Roster (Simulated + Real)
 
-| Developer | Role | Squad | Module Focus | Branch They'll Create |
-|-----------|------|-------|--------------|----------------------|
-| **Dev 1: Arjun** | Backend Engineer | Backend Core | Auth system (JWT login, register, RBAC) | `feature/auth/jwt-login-register` |
-| **Dev 2: Priya** | Backend Engineer | Backend Core | Patient & Doctor models + API endpoints | `feature/patient/profile-and-history` |
-| **Dev 3: Rahul** | Frontend Engineer | Frontend | Auth pages (login, register) + layout | `feature/frontend/auth-pages` |
-| **Dev 4: Sneha** | AI Engineer | AI/Agents | Base agent + Symptom Analyst Agent | `feature/agents/base-and-symptom-analyst` |
-| **Dev 5: Vikram** | Full-stack | Real-time | Vitals model + API + basic monitoring | `feature/vitals/model-and-api` |
+| Developer | Type | Role | Module Focus | Branch | Git Config |
+|-----------|------|------|--------------|--------|------------|
+| **Dev 1: Arjun** (simulated) | Backend Engineer | Auth system | JWT login, register, RBAC | `feature/auth/jwt-login-register` | `git config user.name "Arjun Mehta"` / `git config user.email "arjun@medassist-team.dev"` |
+| **Dev 2: Sanjay Kumar** (REAL) | Backend Engineer | Patient & Doctor API | Patient CRUD, Doctor CRUD | `feature/backend/patient-doctor-api` | His own GitHub account: SKME20417 |
+| **Dev 3: Rahul** (simulated) | Frontend Engineer | Auth UI + Layout | Login, register pages, sidebar | `feature/frontend/auth-pages` | `git config user.name "Rahul Sharma"` / `git config user.email "rahul@medassist-team.dev"` |
+| **Dev 4: Sneha** (simulated) | AI Engineer | AI Agents | Base agent, Symptom Analyst | `feature/agents/base-and-symptom-analyst` | `git config user.name "Sneha Patel"` / `git config user.email "sneha@medassist-team.dev"` |
+| **Dev 5: Vikram** (simulated) | Full-stack | Vitals & Monitoring | Vitals model, API, alerts | `feature/vitals/model-and-api` | `git config user.name "Vikram Reddy"` / `git config user.email "vikram@medassist-team.dev"` |
+| **Dev 6: Pallavi** (simulated) | Backend Engineer | Patient & Doctor Models | Patient/Doctor profiles, medical history (Flask — the correct version) | `feature/patient/profile-and-history` | `git config user.name "Pallavi Desai"` / `git config user.email "pallavi@medassist-team.dev"` |
 
 ---
 
 ## Execution Order (Dependencies)
 
 ```
-Phase A (can run in parallel — no dependencies):
-  ├── Dev 1 (Arjun): Auth backend     ← MUST go first or parallel
-  ├── Dev 2 (Priya): Patient models   ← depends on User model (already exists)
-  └── Dev 3 (Rahul): Frontend auth    ← depends on nothing (can mock API)
+COMPLETED:
+  ✅ Dev 1 (Arjun): Auth backend — MERGED as PR #4
 
-Phase B (after Phase A merges):
-  ├── Dev 4 (Sneha): AI agents        ← depends on patient models from Dev 2
-  └── Dev 5 (Vikram): Vitals          ← depends on patient models from Dev 2
+BLOCKED:
+  🚫 Dev 2 (Sanjay): PR #2 — review feedback given, waiting for fixes (wrong framework)
+
+RUNNING NOW (4 parallel Claude sessions):
+  ├── Dev 3 (Rahul): Frontend auth pages     ← no dependencies
+  ├── Dev 4 (Sneha): AI agents               ← no dependencies (uses stubs)
+  ├── Dev 5 (Vikram): Vitals model + API     ← no dependencies (uses User model)
+  └── Dev 6 (Pallavi): Patient/Doctor models  ← no dependencies (builds on User model)
 
 Merge Order:
-  1. Dev 1 (Arjun) — Auth
-  2. Dev 2 (Priya) — Patient models
-  3. Dev 3 (Rahul) — Frontend auth pages
-  4. Dev 4 (Sneha) — AI agents
-  5. Dev 5 (Vikram) — Vitals
+  1. ✅ Dev 1 (Arjun) — Auth               ← MERGED
+  2. Dev 6 (Pallavi) — Patient/Doctor       ← merge first (others may depend on it)
+  3. Dev 3 (Rahul) — Frontend auth          ← independent, merge anytime
+  4. Dev 5 (Vikram) — Vitals                ← merge after Pallavi
+  5. Dev 4 (Sneha) — AI agents              ← merge after Pallavi
+  6. Dev 2 (Sanjay) — if he reworks to Flask← merge last
+  4. Dev 4 (Sneha) — AI agents           ← after #2 merges
+  5. Dev 5 (Vikram) — Vitals             ← after #2 merges
 ```
 
 ---
 
 ## Status Tracker
 
-| # | Developer | Branch | Status | PR # | CI | Review | Merged |
-|---|-----------|--------|--------|------|----|--------|--------|
-| 1 | Arjun (Auth) | `feature/auth/jwt-login-register` | NOT STARTED | — | — | — | — |
-| 2 | Priya (Patient) | `feature/patient/profile-and-history` | NOT STARTED | — | — | — | — |
-| 3 | Rahul (Frontend) | `feature/frontend/auth-pages` | NOT STARTED | — | — | — | — |
-| 4 | Sneha (Agents) | `feature/agents/base-and-symptom-analyst` | NOT STARTED | — | — | — | — |
-| 5 | Vikram (Vitals) | `feature/vitals/model-and-api` | NOT STARTED | — | — | — | — |
+| # | Developer | Type | Branch | Status | PR # | CI | Review | Merged |
+|---|-----------|------|--------|--------|------|----|--------|--------|
+| 1 | Arjun (Auth) | Simulated | `feature/auth/jwt-login-register` | DONE | #4 | PASS | APPROVED | ✅ MERGED |
+| 2 | Sanjay (Patient/Doctor) | REAL | `feature/backend/patient-doctor-api` | CHANGES REQUESTED | #2 | — | FEEDBACK GIVEN | ❌ Waiting |
+| 3 | Rahul (Frontend) | Simulated | `feature/frontend/auth-pages` | IN PROGRESS | — | — | — | — |
+| 4 | Sneha (Agents) | Simulated | `feature/agents/base-and-symptom-analyst` | IN PROGRESS | — | — | — | — |
+| 5 | Vikram (Vitals) | Simulated | `feature/vitals/model-and-api` | IN PROGRESS | — | — | — | — |
+| 6 | Pallavi (Patient Models) | Simulated | `feature/patient/profile-and-history` | IN PROGRESS | — | — | — | — |
 
 ---
 
@@ -66,43 +112,24 @@ Merge Order:
 
 When PK opens a new Claude session to simulate a developer, paste this:
 
-### For Dev 1 (Arjun — Auth):
+### For Dev 1 (Arjun — Auth): ALREADY DONE in session 1
 ```
-I'm simulating Developer "Arjun" (backend engineer) for my team learning exercise.
-Read docs/TEAM_SIMULATION_PLAN.md for full context.
-Task: Build the auth system on branch feature/auth/jwt-login-register
-Files to create/modify:
-- backend/app/api/v1/auth.py (register, login, refresh, logout endpoints)
-- backend/app/services/auth_service.py (business logic)
-- backend/app/middleware/auth_middleware.py (JWT decorators, role checks)
-- backend/app/schemas/auth_schema.py (Pydantic request/response models)
-- tests/unit/services/test_auth_service.py (unit tests)
-Follow CONTRIBUTING.md and .claude/rules/02-backend.md and 08-security.md strictly.
-Create the branch, write the code, commit, push, and open a PR.
-```
-
-### For Dev 2 (Priya — Patient Models):
-```
-I'm simulating Developer "Priya" (backend engineer) for my team learning exercise.
-Read docs/TEAM_SIMULATION_PLAN.md for full context.
-Task: Build patient & doctor profile models + API on branch feature/patient/profile-and-history
-Files to create/modify:
-- backend/app/models/patient.py (PatientProfile, MedicalHistory, Allergy models)
-- backend/app/models/doctor.py (DoctorProfile model)
-- backend/app/api/v1/patients.py (CRUD endpoints)
-- backend/app/api/v1/doctors.py (CRUD endpoints)
-- backend/app/services/patient_service.py
-- backend/app/services/doctor_service.py
-- backend/app/schemas/patient_schema.py
-- backend/app/schemas/doctor_schema.py
-Follow CONTRIBUTING.md and .claude/rules/02-backend.md and 04-database.md strictly.
-Create the branch, write the code, commit, push, and open a PR.
+Code is written and on branch feature/auth/jwt-login-register.
+Just needs: git add, commit, push, and manual PR creation.
+Git config: user.name="Arjun Mehta", user.email="arjun@medassist-team.dev"
 ```
 
 ### For Dev 3 (Rahul — Frontend Auth):
 ```
 I'm simulating Developer "Rahul" (frontend engineer) for my team learning exercise.
 Read docs/TEAM_SIMULATION_PLAN.md for full context.
+
+FIRST run these git commands:
+  git checkout main && git pull origin main
+  git config user.name "Rahul Sharma"
+  git config user.email "rahul@medassist-team.dev"
+  git checkout -b feature/frontend/auth-pages
+
 Task: Build auth pages + app layout on branch feature/frontend/auth-pages
 Files to create/modify:
 - frontend/src/app/(auth)/login/page.tsx
@@ -115,32 +142,49 @@ Files to create/modify:
 - frontend/src/lib/api-client.ts (Axios instance)
 - frontend/src/lib/validators.ts (Zod schemas)
 Follow CONTRIBUTING.md and .claude/rules/03-frontend.md strictly.
-Create the branch, write the code, commit, push, and open a PR.
+Write the code, commit, push, and open a PR.
 ```
 
 ### For Dev 4 (Sneha — AI Agents):
 ```
 I'm simulating Developer "Sneha" (AI engineer) for my team learning exercise.
 Read docs/TEAM_SIMULATION_PLAN.md for full context.
+
+FIRST run these git commands:
+  git checkout main && git pull origin main
+  git config user.name "Sneha Patel"
+  git config user.email "sneha@medassist-team.dev"
+  git checkout -b feature/agents/base-and-symptom-analyst
+
 Task: Build base agent + symptom analyst on branch feature/agents/base-and-symptom-analyst
 Files to create/modify:
+- backend/app/agents/__init__.py
 - backend/app/agents/base_agent.py (abstract base class)
 - backend/app/agents/orchestrator.py (agent router)
 - backend/app/agents/symptom_analyst.py (symptom analysis agent)
+- backend/app/agents/tools/__init__.py
 - backend/app/agents/tools/medical_kb.py (RAG tool)
 - backend/app/agents/tools/patient_history.py (patient data tool)
 - backend/app/agents/prompts/system_prompts.py
 - backend/app/agents/prompts/symptom_prompts.py
+- backend/app/integrations/__init__.py
 - backend/app/integrations/openai_client.py (OpenAI wrapper)
 - tests/unit/agents/test_symptom_analyst.py
 Follow CONTRIBUTING.md and .claude/rules/07-agents.md and 06-rag.md strictly.
-Create the branch, write the code, commit, push, and open a PR.
+Write the code, commit, push, and open a PR.
 ```
 
 ### For Dev 5 (Vikram — Vitals):
 ```
 I'm simulating Developer "Vikram" (full-stack engineer) for my team learning exercise.
 Read docs/TEAM_SIMULATION_PLAN.md for full context.
+
+FIRST run these git commands:
+  git checkout main && git pull origin main
+  git config user.name "Vikram Reddy"
+  git config user.email "vikram@medassist-team.dev"
+  git checkout -b feature/vitals/model-and-api
+
 Task: Build vitals model + API + basic monitoring on branch feature/vitals/model-and-api
 Files to create/modify:
 - backend/app/models/vitals.py (VitalsReading model)
@@ -151,18 +195,34 @@ Files to create/modify:
 - backend/app/schemas/vitals_schema.py
 - tests/unit/services/test_vitals_service.py
 Follow CONTRIBUTING.md and .claude/rules/02-backend.md and 04-database.md strictly.
-Create the branch, write the code, commit, push, and open a PR.
+Write the code, commit, push, and open a PR.
 ```
 
 ---
 
 ## What PK Does As Lead (After Each PR)
 
-1. **Review the PR** — check code quality, naming, test coverage
-2. **Request changes** if needed (comment on the PR)
+1. **Review the PR** — check code quality, naming, test coverage, framework compliance
+2. **Request changes** if needed (comment on the PR with specific issues)
 3. **Approve and merge** when satisfied
 4. **Update the status tracker** in this document
 5. **Ensure main stays green** — CI passes after each merge
+6. **Handle real team PRs** — Sanjay's PR #2 needs review and feedback
+
+---
+
+## Lead's Review Checklist (For Each PR)
+
+- [ ] Correct branch naming? (`feature/module/description`)
+- [ ] Conventional commit messages? (`feat(scope): description`)
+- [ ] Uses Flask (NOT FastAPI)? Per project rules
+- [ ] Uses SQLAlchemy 2.0 style queries?
+- [ ] Has Pydantic schemas for validation?
+- [ ] Service layer pattern? (routes call services, not raw DB queries)
+- [ ] Type hints on all functions?
+- [ ] No `__pycache__`, `.env`, `venv/` committed?
+- [ ] Tests included?
+- [ ] CI passes?
 
 ---
 
@@ -175,6 +235,8 @@ Create the branch, write the code, commit, push, and open a PR.
 - How to handle merge conflicts when two devs touch the same file
 - How to write good PR descriptions and commit messages
 - How to coordinate parallel development across a team
+- **How to handle a team member who deviated from tech stack** (Sanjay's FastAPI situation)
+- How to give constructive code review feedback
 
 ---
 
