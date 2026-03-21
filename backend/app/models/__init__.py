@@ -15,3 +15,5 @@ from app.models.vitals import VitalsReading  # noqa: F401
 from app.models.alert import MonitoringAlert  # noqa: F401
 from app.models.care_plan import CarePlan, CarePlanGoal, CarePlanActivity  # noqa: F401
 from app.models.medication import Medication  # noqa: F401
+from app.models.audit_log import AuditLog  # noqa: F401
+from app.models.notification import Notification  # noqa: F401
