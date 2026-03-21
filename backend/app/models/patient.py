@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Numeric, String, Text
-from sqlalchemy.dialects.postgresql import JSON, UUID
+from app.models.base import PortableJSON, PortableUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
@@ -21,20 +21,20 @@ class PatientProfile(db.Model):
     __tablename__ = "patient_profiles"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        PortableUUID(), primary_key=True, default=uuid.uuid4
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), unique=True, nullable=False, index=True
+        PortableUUID(), ForeignKey("users.id"), unique=True, nullable=False, index=True
     )
     date_of_birth: Mapped[date] = mapped_column(Date, nullable=False)
     gender: Mapped[str | None] = mapped_column(String(20), nullable=True)
     blood_type: Mapped[str | None] = mapped_column(String(5), nullable=True)
     height_cm: Mapped[Decimal | None] = mapped_column(Numeric(5, 1), nullable=True)
     weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(5, 1), nullable=True)
-    emergency_contact: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    insurance_info: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    emergency_contact: Mapped[dict | None] = mapped_column(PortableJSON(), nullable=True)
+    insurance_info: Mapped[dict | None] = mapped_column(PortableJSON(), nullable=True)
     assigned_doctor_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True
+        PortableUUID(), ForeignKey("users.id"), nullable=True, index=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -67,10 +67,10 @@ class MedicalHistory(db.Model):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        PortableUUID(), primary_key=True, default=uuid.uuid4
     )
     patient_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("patient_profiles.id", ondelete="CASCADE"),
+        PortableUUID(), ForeignKey("patient_profiles.id", ondelete="CASCADE"),
         nullable=False, index=True
     )
     condition_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -79,10 +79,10 @@ class MedicalHistory(db.Model):
     icd_10_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     diagnosed_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        PortableUUID(), ForeignKey("users.id"), nullable=True
     )
     created_by: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+        PortableUUID(), ForeignKey("users.id"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -112,10 +112,10 @@ class Allergy(db.Model):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        PortableUUID(), primary_key=True, default=uuid.uuid4
     )
     patient_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("patient_profiles.id", ondelete="CASCADE"),
+        PortableUUID(), ForeignKey("patient_profiles.id", ondelete="CASCADE"),
         nullable=False, index=True
     )
     allergen: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -123,7 +123,7 @@ class Allergy(db.Model):
     severity: Mapped[str] = mapped_column(String(20), nullable=False)
     diagnosed_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+        PortableUUID(), ForeignKey("users.id"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

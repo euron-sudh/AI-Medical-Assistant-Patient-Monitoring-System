@@ -50,3 +50,4 @@ cypress/screenshots/
 
 # Build
 *.log
+instance/

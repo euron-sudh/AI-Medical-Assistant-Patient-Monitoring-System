@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, Numeric, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from app.models.base import PortableUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
@@ -25,10 +25,10 @@ class VitalsReading(db.Model):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        PortableUUID(), primary_key=True, default=uuid.uuid4
     )
     patient_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+        PortableUUID(), ForeignKey("users.id"), nullable=False, index=True
     )
     heart_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)
     blood_pressure_systolic: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -40,7 +40,7 @@ class VitalsReading(db.Model):
     weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(5, 1), nullable=True)
     pain_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
     device_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("devices.id"), nullable=True, index=True
+        PortableUUID(), ForeignKey("devices.id"), nullable=True, index=True
     )
     is_manual_entry: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_anomalous: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -49,7 +49,7 @@ class VitalsReading(db.Model):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
     created_by: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+        PortableUUID(), ForeignKey("users.id"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False

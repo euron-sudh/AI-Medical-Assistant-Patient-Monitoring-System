@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from app.models.base import PortableJSON, PortableUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
@@ -31,26 +31,26 @@ class MonitoringAlert(db.Model):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        PortableUUID(), primary_key=True, default=uuid.uuid4
     )
     patient_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+        PortableUUID(), ForeignKey("users.id"), nullable=False, index=True
     )
     vitals_reading_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("vitals_readings.id"), nullable=True
+        PortableUUID(), ForeignKey("vitals_readings.id"), nullable=True
     )
     alert_type: Mapped[str] = mapped_column(String(50), nullable=False)
     severity: Mapped[str] = mapped_column(String(20), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    ai_analysis: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    ai_analysis: Mapped[dict | None] = mapped_column(PortableJSON(), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)
     acknowledged_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        PortableUUID(), ForeignKey("users.id"), nullable=True
     )
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        PortableUUID(), ForeignKey("users.id"), nullable=True
     )
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     escalation_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

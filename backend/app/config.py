@@ -94,12 +94,16 @@ class DevelopmentConfig(BaseConfig):
 
 
 class TestingConfig(BaseConfig):
-    """Testing environment configuration."""
+    """Testing environment configuration.
+
+    Uses SQLite for local testing (no Docker needed).
+    CI overrides with TEST_DATABASE_URL pointing to real PostgreSQL.
+    """
 
     TESTING = True
     SQLALCHEMY_DATABASE_URI = os.getenv(
         "TEST_DATABASE_URL",
-        os.getenv("DATABASE_URL", "postgresql://medassist:test_password@localhost:5432/medassist_test"),
+        os.getenv("DATABASE_URL", "sqlite:///test.db"),
     )
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
     RATELIMIT_ENABLED = False
