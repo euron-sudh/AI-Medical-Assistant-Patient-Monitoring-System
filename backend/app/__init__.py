@@ -46,7 +46,7 @@ def _register_extensions(app: Flask) -> None:
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    cors.init_app(app)
+    cors.init_app(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
     socketio.init_app(app, cors_allowed_origins="*")
     limiter.init_app(app)
 

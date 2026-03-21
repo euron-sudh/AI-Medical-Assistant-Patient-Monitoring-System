@@ -1,6 +1,23 @@
 import axios from "axios";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5055/api/v1";
+// Auto-detect API URL: use env var if set, otherwise detect from browser location
+function getApiBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  // In browser: if on Render (onrender.com), use the backend URL
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host.includes("onrender.com")) {
+      // Replace frontend service name with backend service name
+      return "https://medassist-backend1.onrender.com/api/v1";
+    }
+  }
+  // Local development fallback
+  return "http://localhost:5055/api/v1";
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
