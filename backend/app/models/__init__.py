@@ -17,3 +17,6 @@ from app.models.care_plan import CarePlan, CarePlanGoal, CarePlanActivity  # noq
 from app.models.medication import Medication  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
+from app.models.report import MedicalReport, LabValue  # noqa: F401
+from app.models.symptom_session import SymptomSession  # noqa: F401
+from app.models.conversation import Conversation  # noqa: F401
