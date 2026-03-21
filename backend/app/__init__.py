@@ -60,8 +60,10 @@ def _register_blueprints(app: Flask) -> None:
         app.register_blueprint(auth_bp)
     """
     from app.api.v1.health import bp as health_bp
+    from app.api.v1.auth import bp as auth_bp
 
     app.register_blueprint(health_bp)
+    app.register_blueprint(auth_bp)
 
 
 def _register_error_handlers(app: Flask) -> None:

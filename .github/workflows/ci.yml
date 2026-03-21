@@ -68,9 +68,11 @@ jobs:
         working-directory: backend
         env:
           DATABASE_URL: postgresql://medassist:test_password@localhost:5432/medassist_test
+          TEST_DATABASE_URL: postgresql://medassist:test_password@localhost:5432/medassist_test
           REDIS_URL: redis://localhost:6379/0
           FLASK_ENV: testing
           SECRET_KEY: test-secret-key
+          JWT_SECRET_KEY: test-jwt-secret-key
         run: |
           if find tests -name "test_*.py" 2>/dev/null | head -1 | grep -q .; then
             pytest --cov=app --cov-report=xml -v

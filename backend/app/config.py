@@ -98,7 +98,8 @@ class TestingConfig(BaseConfig):
 
     TESTING = True
     SQLALCHEMY_DATABASE_URI = os.getenv(
-        "TEST_DATABASE_URL", "postgresql://user:pass@localhost:5432/medassist_test"
+        "TEST_DATABASE_URL",
+        os.getenv("DATABASE_URL", "postgresql://medassist:test_password@localhost:5432/medassist_test"),
     )
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
     RATELIMIT_ENABLED = False
