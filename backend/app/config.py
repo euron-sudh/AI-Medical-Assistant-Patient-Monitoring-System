@@ -17,9 +17,9 @@ class BaseConfig:
     TESTING = False
 
     # SQLAlchemy
-    SQLALCHEMY_DATABASE_URI = os.getenv(
-        "DATABASE_URL", "postgresql://user:pass@localhost:5432/medassist"
-    )
+    # Render provides DATABASE_URL as "postgres://" but SQLAlchemy 2.0 requires "postgresql://"
+    _db_url = os.getenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/medassist")
+    SQLALCHEMY_DATABASE_URI = _db_url.replace("postgres://", "postgresql://", 1)
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True, "pool_size": 10, "max_overflow": 20}
 
@@ -82,9 +82,9 @@ class BaseConfig:
     # Encryption
     PHI_ENCRYPTION_KEY = os.getenv("PHI_ENCRYPTION_KEY", "")
 
-    # Rate Limiting
+    # Rate Limiting — fall back to in-memory when Redis is not available (e.g. Render free tier)
     RATELIMIT_DEFAULT = "200/hour"
-    RATELIMIT_STORAGE_URI = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    RATELIMIT_STORAGE_URI = os.getenv("REDIS_URL", "memory://")
 
 
 class DevelopmentConfig(BaseConfig):
@@ -93,6 +93,7 @@ class DevelopmentConfig(BaseConfig):
     DEBUG = True
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
     RATELIMIT_DEFAULT = "1000/hour"
+    RATELIMIT_STORAGE_URI = os.getenv("REDIS_URL", "memory://")
 
 
 class TestingConfig(BaseConfig):
