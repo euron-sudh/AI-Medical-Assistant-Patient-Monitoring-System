@@ -46,9 +46,9 @@ class User(db.Model):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    # Relationships — added when PatientProfile and DoctorProfile models are created
-    # patient_profile = relationship("PatientProfile", back_populates="user", uselist=False)
-    # doctor_profile = relationship("DoctorProfile", back_populates="user", uselist=False)
+    # Relationships
+    patient_profile = relationship("PatientProfile", back_populates="user", uselist=False, foreign_keys="PatientProfile.user_id")
+    doctor_profile = relationship("DoctorProfile", back_populates="user", uselist=False, foreign_keys="DoctorProfile.user_id")
 
     def set_password(self, password: str) -> None:
         """Hash and store the password."""

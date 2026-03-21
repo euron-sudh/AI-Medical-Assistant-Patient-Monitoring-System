@@ -8,3 +8,5 @@ Example:
 """
 
 from app.models.user import User  # noqa: F401
+from app.models.patient import PatientProfile, MedicalHistory, Allergy  # noqa: F401
+from app.models.doctor import DoctorProfile  # noqa: F401

@@ -15,10 +15,14 @@ def register_blueprints(app: Flask) -> None:
     from app.api.v1.health import bp as health_bp
 
     from app.api.v1.auth import bp as auth_bp
+    from app.api.v1.patients import bp as patients_bp
+    from app.api.v1.doctors import bp as doctors_bp
 
     blueprints = [
         health_bp,
         auth_bp,
+        patients_bp,
+        doctors_bp,
     ]
 
     for blueprint in blueprints:
