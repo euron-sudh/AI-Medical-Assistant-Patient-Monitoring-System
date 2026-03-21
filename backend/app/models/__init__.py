@@ -10,3 +10,6 @@ Example:
 from app.models.user import User  # noqa: F401
 from app.models.patient import PatientProfile, MedicalHistory, Allergy  # noqa: F401
 from app.models.doctor import DoctorProfile  # noqa: F401
+from app.models.device import Device  # noqa: F401
+from app.models.vitals import VitalsReading  # noqa: F401
+from app.models.alert import MonitoringAlert  # noqa: F401
