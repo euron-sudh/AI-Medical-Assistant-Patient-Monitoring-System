@@ -85,11 +85,18 @@ class OpenAIClient:
         if not self._api_key:
             logger.warning("openai_client_no_api_key")
 
-        self._client = OpenAI(
-            api_key=self._api_key,
-            organization=self._org_id or None,
-            timeout=self._timeout,
-        )
+        # Use EURI/OpenAI-compatible API gateway if configured
+        base_url = BaseConfig.OPENAI_BASE_URL or BaseConfig.EURI_BASE_URL
+        client_kwargs: dict[str, Any] = {
+            "api_key": self._api_key,
+            "timeout": self._timeout,
+        }
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        if self._org_id:
+            client_kwargs["organization"] = self._org_id
+
+        self._client = OpenAI(**client_kwargs)
 
     def chat_completion(
         self,

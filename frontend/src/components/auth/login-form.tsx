@@ -15,10 +15,17 @@ export function LoginForm() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   });
+
+  const fillTestCredentials = (email: string, password: string) => {
+    setValue("email", email);
+    setValue("password", password);
+    setServerError(null);
+  };
 
   const onSubmit = async (data: LoginFormData) => {
     setServerError(null);
@@ -29,15 +36,17 @@ export function LoginForm() {
         password: data.password,
       });
 
-      localStorage.setItem("accessToken", response.data.accessToken);
-      localStorage.setItem("refreshToken", response.data.refreshToken);
+      const { access_token, refresh_token, user } = response.data;
+      localStorage.setItem("accessToken", access_token);
+      localStorage.setItem("refreshToken", refresh_token);
+      localStorage.setItem("user", JSON.stringify(user));
 
-      const role = response.data.user.role;
+      const role = user.role;
       const redirectMap: Record<string, string> = {
-        patient: "/patient",
-        doctor: "/doctor",
-        nurse: "/doctor",
-        admin: "/admin",
+        patient: "/patient/dashboard",
+        doctor: "/doctor/dashboard",
+        nurse: "/doctor/dashboard",
+        admin: "/admin/dashboard",
       };
       router.push(redirectMap[role] ?? "/");
     } catch (error: unknown) {
@@ -112,6 +121,50 @@ export function LoginForm() {
       >
         {isSubmitting ? "Signing in..." : "Sign in"}
       </button>
+
+      <div className="mt-6 rounded-md border border-border bg-muted/50 p-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Test Accounts (click to fill)
+        </p>
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => fillTestCredentials("patient@demo.dev", "Demo1234!")}
+            className="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-left text-sm hover:bg-accent"
+          >
+            <div>
+              <span className="font-medium text-foreground">Patient</span>
+              <span className="ml-2 text-muted-foreground">patient@demo.dev</span>
+            </div>
+            <span className="text-xs text-muted-foreground">Demo1234!</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => fillTestCredentials("doctor@demo.dev", "Demo1234!")}
+            className="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-left text-sm hover:bg-accent"
+          >
+            <div>
+              <span className="font-medium text-foreground">Doctor</span>
+              <span className="ml-2 text-muted-foreground">doctor@demo.dev</span>
+            </div>
+            <span className="text-xs text-muted-foreground">Demo1234!</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => fillTestCredentials("admin@demo.dev", "Demo1234!")}
+            className="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-left text-sm hover:bg-accent"
+          >
+            <div>
+              <span className="font-medium text-foreground">Admin</span>
+              <span className="ml-2 text-muted-foreground">admin@demo.dev</span>
+            </div>
+            <span className="text-xs text-muted-foreground">Demo1234!</span>
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Register new accounts at <a href="/register" className="underline hover:text-foreground">/register</a>
+        </p>
+      </div>
     </form>
   );
 }

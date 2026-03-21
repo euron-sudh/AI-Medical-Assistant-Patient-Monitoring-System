@@ -14,16 +14,20 @@ export function Header() {
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
-        setUser({
-          id: payload.sub,
-          email: payload.email ?? "",
-          firstName: payload.firstName ?? "",
-          lastName: payload.lastName ?? "",
-          role: payload.role,
-          isActive: true,
-          isVerified: true,
-          createdAt: "",
-        });
+        const storedUser = localStorage.getItem("user");
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        } else {
+          setUser({
+            id: payload.sub,
+            email: payload.email ?? "",
+            first_name: payload.first_name ?? "",
+            last_name: payload.last_name ?? "",
+            role: payload.role,
+            is_active: true,
+            is_verified: true,
+          });
+        }
       } catch {
         setUser(null);
       }
@@ -33,6 +37,7 @@ export function Header() {
   const handleLogout = () => {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
+    localStorage.removeItem("user");
     setUser(null);
     router.push("/login");
   };
@@ -48,7 +53,7 @@ export function Header() {
           {user ? (
             <>
               <span className="hidden text-sm text-muted-foreground md:inline-block">
-                {user.firstName} {user.lastName}
+                {user.first_name} {user.last_name}
               </span>
               <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium capitalize text-primary">
                 {user.role}

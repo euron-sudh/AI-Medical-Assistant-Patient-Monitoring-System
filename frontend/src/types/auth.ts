@@ -3,14 +3,14 @@ export type UserRole = "patient" | "doctor" | "nurse" | "admin";
 export interface User {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  first_name: string;
+  last_name: string;
   role: UserRole;
   phone?: string;
-  isActive: boolean;
-  isVerified: boolean;
-  lastLoginAt?: string;
-  createdAt: string;
+  is_active: boolean;
+  is_verified: boolean;
+  last_login_at?: string;
+  created_at?: string;
 }
 
 export interface LoginRequest {
@@ -19,17 +19,18 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  accessToken: string;
-  refreshToken: string;
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
   user: User;
 }
 
 export interface RegisterRequest {
   email: string;
   password: string;
-  confirmPassword: string;
-  firstName: string;
-  lastName: string;
+  confirm_password: string;
+  first_name: string;
+  last_name: string;
   role: UserRole;
   phone?: string;
 }

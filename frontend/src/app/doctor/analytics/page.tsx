@@ -1,0 +1,44 @@
+export default function AnalyticsPage() {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
+        <p className="mt-1 text-muted-foreground">
+          Clinical analytics, patient outcomes, and performance metrics.
+        </p>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-4">
+        <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
+          <p className="text-sm font-medium text-muted-foreground">Total Patients</p>
+          <p className="mt-2 text-3xl font-bold text-foreground">0</p>
+        </div>
+        <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
+          <p className="text-sm font-medium text-muted-foreground">Consultations (Month)</p>
+          <p className="mt-2 text-3xl font-bold text-foreground">0</p>
+        </div>
+        <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
+          <p className="text-sm font-medium text-muted-foreground">Avg. Session Time</p>
+          <p className="mt-2 text-3xl font-bold text-muted-foreground">N/A</p>
+        </div>
+        <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
+          <p className="text-sm font-medium text-muted-foreground">Patient Satisfaction</p>
+          <p className="mt-2 text-3xl font-bold text-muted-foreground">N/A</p>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-foreground">Clinical Analytics Dashboard</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Detailed analytics including patient outcome trends, consultation statistics,
+          AI-assisted diagnosis accuracy, and workload distribution charts will be displayed here.
+        </p>
+        <div className="mt-4">
+          <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
+            Coming Soon
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
