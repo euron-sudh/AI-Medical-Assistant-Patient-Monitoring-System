@@ -74,33 +74,40 @@ jobs:
       # Deploy to VM via SSH
       - name: Deploy to VM
         run: |
-          # Copy compose and nginx config to VM
-          gcloud compute scp docker-compose.prod.yml ${VM_NAME}:/opt/medassist/docker-compose.prod.yml \
-            --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
-
-          gcloud compute scp --recurse nginx ${VM_NAME}:/opt/medassist/ \
-            --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
-
-          # Pull and restart on VM
+          # Copy compose and nginx config to VM via a temp dir (avoids permission issues)
           gcloud compute ssh ${VM_NAME} --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID} --command="
+            mkdir -p /tmp/medassist-deploy/nginx
+          "
+
+          gcloud compute scp docker-compose.prod.yml ${VM_NAME}:/tmp/medassist-deploy/docker-compose.prod.yml \
+            --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
+
+          gcloud compute scp --recurse nginx ${VM_NAME}:/tmp/medassist-deploy/ \
+            --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
+
+          # Move files into place and restart with sudo
+          gcloud compute ssh ${VM_NAME} --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID} --command="
+            sudo cp /tmp/medassist-deploy/docker-compose.prod.yml /opt/medassist/docker-compose.prod.yml
+            sudo cp -r /tmp/medassist-deploy/nginx/* /opt/medassist/nginx/
+            rm -rf /tmp/medassist-deploy
             cd /opt/medassist
 
             # Auth with registry
-            gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev --quiet 2>/dev/null || true
+            sudo gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev --quiet 2>/dev/null || true
 
             # Set env vars for compose
             export REGISTRY_URL='${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPO}'
             export IMAGE_TAG='${IMAGE_TAG}'
 
             # Pull and restart
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            sudo docker compose -f docker-compose.prod.yml pull
+            sudo docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
             # Cleanup
-            docker image prune -f
+            sudo docker image prune -f
 
             echo 'Deployment complete!'
-            docker compose -f docker-compose.prod.yml ps
+            sudo docker compose -f docker-compose.prod.yml ps
           "
 
       # Health check
