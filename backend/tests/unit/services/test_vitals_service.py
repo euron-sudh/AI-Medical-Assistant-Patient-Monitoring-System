@@ -4,8 +4,10 @@ import uuid
 from datetime import datetime, timezone, timedelta
 
 import pytest
+from sqlalchemy import select
 
 from app.models.user import User
+from app.models.alert import MonitoringAlert
 from app.models.vitals import VitalsReading
 from app.schemas.vitals_schema import CreateVitalsRequest
 from app.services.vitals_service import VitalsService
@@ -57,6 +59,27 @@ class TestCreateReading:
         assert result.patient_id == str(patient.id)
         assert result.is_manual_entry is True
         assert result.is_anomalous is False
+
+    def test_create_reading_triggers_monitoring_alert_on_critical_breach(
+        self, db, vitals_service, patient
+    ):
+        """Creating vitals outside critical range should mark anomalous + create alert."""
+        data = CreateVitalsRequest(heart_rate=200)
+
+        result = vitals_service.create_reading(patient.id, data, created_by=patient.id)
+
+        reading = db.session.get(VitalsReading, uuid.UUID(result.id))
+        assert reading is not None
+        assert reading.is_anomalous is True
+
+        alerts = db.session.execute(
+            select(MonitoringAlert).where(
+                MonitoringAlert.patient_id == patient.id,
+                MonitoringAlert.vitals_reading_id == reading.id,
+            )
+        ).scalars().all()
+        assert len(alerts) == 1
+        assert alerts[0].status == "active"
 
     def test_create_reading_persists_to_database(self, db, vitals_service, patient):
         """Creating a reading persists it in the database."""
