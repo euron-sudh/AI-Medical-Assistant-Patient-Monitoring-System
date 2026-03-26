@@ -115,9 +115,9 @@ class CarePlanService:
         if requester_role == "admin":
             return True
         if requester_role == "patient":
-            return str(plan.patient_id) == requester_id if plan else patient_id == requester_id
+            return str(plan.patient_id) == str(requester_id) if plan else str(patient_id) == str(requester_id)
         if requester_role in ("doctor", "nurse"):
-            return str(plan.doctor_id) == requester_id if plan else True
+            return str(plan.doctor_id) == str(requester_id) if plan else True
         return False
 
     def _get_plan_or_raise(self, plan_id: str) -> CarePlan:

@@ -67,7 +67,7 @@ class MedicationService:
         if requester_role == "admin":
             return True
         if requester_role == "patient":
-            return requester_id == patient_id
+            return str(requester_id) == str(patient_id)
         return requester_role in ("doctor", "nurse")
 
     def _get_or_raise(self, medication_id: str) -> Medication:
