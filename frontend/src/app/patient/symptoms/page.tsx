@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { ApiKeyModal } from "@/components/shared/api-key-modal";
 import apiClient from "@/lib/api-client";
+
+const JOURNEY_STORAGE_STEP = "medassist_journey_step";
+const JOURNEY_STORAGE_SPECIALTY = "medassist_specialty";
 
 interface Message {
   role: "user" | "assistant";
@@ -19,7 +23,8 @@ interface SessionResult {
   recommended_specialist?: string;
 }
 
-export default function SymptomsPage() {
+function SymptomsPageContent() {
+  const searchParams = useSearchParams();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -37,6 +42,76 @@ export default function SymptomsPage() {
     setHasApiKey(!!key && key.startsWith("euri-"));
     loadPastSessions();
   }, []);
+
+  const specialtyParam = searchParams.get("specialty");
+  const resumeParam = searchParams.get("resume");
+
+  useEffect(() => {
+    if (specialtyParam) {
+      localStorage.setItem(JOURNEY_STORAGE_SPECIALTY, specialtyParam);
+      localStorage.setItem(JOURNEY_STORAGE_STEP, "1");
+    }
+  }, [specialtyParam]);
+
+  useEffect(() => {
+    if (!resumeParam) return;
+    let cancelled = false;
+
+    const loadSession = async () => {
+      try {
+        const res = await apiClient.get(`/symptoms/session/${resumeParam}`);
+        const data = res.data as Record<string, unknown>;
+        if (cancelled || !data?.id) return;
+
+        setSessionId(String(data.id));
+        setSessionResult(null);
+        setError(null);
+
+        const log = data.conversation_log;
+        const parsed: Message[] = [];
+        if (Array.isArray(log)) {
+          for (const entry of log) {
+            if (entry && typeof entry === "object" && "role" in entry && "content" in entry) {
+              const role = (entry as { role: string }).role;
+              const content = String((entry as { content: unknown }).content ?? "");
+              if (role === "user" || role === "assistant") {
+                parsed.push({ role, content });
+              }
+            }
+          }
+        }
+        if (parsed.length === 0) {
+          parsed.push({
+            role: "assistant",
+            content:
+              "Welcome back. Continue describing your symptoms, or ask a follow-up question.",
+          });
+        }
+        setMessages(parsed);
+
+        const analysis = data.ai_analysis as Record<string, unknown> | null | undefined;
+        if (analysis && typeof analysis === "object") {
+          setSessionResult({
+            urgency_score: analysis.urgency_score as number | undefined,
+            differential_diagnosis: analysis.differential_diagnosis as
+              | SessionResult["differential_diagnosis"]
+              | undefined,
+            recommended_action: analysis.recommended_action as string | undefined,
+            recommended_specialist: analysis.recommended_specialist as string | undefined,
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setError("Could not resume this session. Start a new check or try again.");
+        }
+      }
+    };
+
+    void loadSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [resumeParam]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -166,12 +241,18 @@ export default function SymptomsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Symptom Checker</h1>
           <p className="mt-1 text-muted-foreground">
             Describe your symptoms and get AI-powered analysis and recommendations.
           </p>
+          {specialtyParam && (
+            <p className="mt-2 text-sm font-medium text-primary">
+              Specialty:{" "}
+              {specialtyParam.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+            </p>
+          )}
         </div>
         <button
           onClick={() => setShowKeyModal(true)}
@@ -427,6 +508,20 @@ export default function SymptomsPage() {
         onSave={(key) => setHasApiKey(!!key && key.startsWith("euri-"))}
       />
     </div>
+  );
+}
+
+export default function SymptomsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[240px] items-center justify-center rounded-lg border border-border bg-card">
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        </div>
+      }
+    >
+      <SymptomsPageContent />
+    </Suspense>
   );
 }
 
