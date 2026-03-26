@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.extensions import db
 from app.models.vitals import VitalsReading
 from app.schemas.vitals_schema import CreateVitalsRequest, VitalsResponse
+from app.services.monitoring_service import monitoring_service
 
 
 class VitalsService:
@@ -46,6 +47,10 @@ class VitalsService:
 
         db.session.add(reading)
         db.session.commit()
+
+        # Trigger monitoring evaluation immediately so both manual and device-ingested
+        # vitals flow into anomaly detection and alert creation.
+        monitoring_service.analyze_and_handle_vitals_reading(reading, actor_id=created_by)
 
         return self._to_response(reading)
 

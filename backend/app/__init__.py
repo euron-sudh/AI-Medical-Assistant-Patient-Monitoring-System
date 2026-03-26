@@ -72,7 +72,10 @@ def _register_blueprints(app: Flask) -> None:
     from app.api.v1.appointments import bp as appointments_bp
     from app.api.v1.telemedicine import bp as telemedicine_bp
     from app.api.v1.chat import bp as chat_bp
-    from app.api.v1.admin import bp as admin_bp, monitoring_bp
+    from app.api.v1.monitoring import bp as monitoring_bp
+    from app.api.v1.devices import bp as devices_bp
+    from app.api.v1.analytics import bp as analytics_bp
+    from app.api.v1.admin import bp as admin_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)
@@ -87,8 +90,10 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(appointments_bp)
     app.register_blueprint(telemedicine_bp)
     app.register_blueprint(chat_bp)
-    app.register_blueprint(admin_bp)
     app.register_blueprint(monitoring_bp)
+    app.register_blueprint(devices_bp)
+    app.register_blueprint(analytics_bp)
+    app.register_blueprint(admin_bp)
 
 
 def _register_error_handlers(app: Flask) -> None:

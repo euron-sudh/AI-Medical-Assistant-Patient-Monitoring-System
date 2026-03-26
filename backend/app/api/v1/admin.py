@@ -10,7 +10,6 @@ from app.models.conversation import Conversation
 from app.models.alert import MonitoringAlert
 
 bp = Blueprint("admin", __name__, url_prefix="/api/v1/admin")
-monitoring_bp = Blueprint("monitoring", __name__, url_prefix="/api/v1/monitoring")
 
 
 def _require_admin():
@@ -183,7 +182,3 @@ def admin_monitoring_alerts():
     return _get_alerts_response(require_admin_role=True)
 
 
-@monitoring_bp.route("/alerts", methods=["GET"])
-@jwt_required()
-def monitoring_alerts():
-    return _get_alerts_response(require_admin_role=False)
