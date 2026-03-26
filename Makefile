@@ -65,10 +65,10 @@ deploy:         ## Build and deploy to GCP production
 	bash scripts/deploy.sh
 
 ssh:            ## SSH into GCP production VM
-	@. .gcp-outputs 2>/dev/null; gcloud compute ssh $${VM_NAME:-medassist-vm} --zone=$${GCP_ZONE:-us-central1-a} --project=$${GCP_PROJECT_ID:-medassist-ai-prod}
+	@. .gcp-outputs 2>/dev/null; gcloud compute ssh $${VM_NAME:-medassist-vm} --zone=$${GCP_ZONE:-us-central1-c} --project=$${GCP_PROJECT_ID:-medassist-ai-prod}
 
 logs-prod:      ## Tail production logs
-	@. .gcp-outputs 2>/dev/null; gcloud compute ssh $${VM_NAME:-medassist-vm} --zone=$${GCP_ZONE:-us-central1-a} --project=$${GCP_PROJECT_ID:-medassist-ai-prod} --command="cd /opt/medassist && docker compose -f docker-compose.prod.yml logs -f --tail=100"
+	@. .gcp-outputs 2>/dev/null; gcloud compute ssh $${VM_NAME:-medassist-vm} --zone=$${GCP_ZONE:-us-central1-c} --project=$${GCP_PROJECT_ID:-medassist-ai-prod} --command="cd /opt/medassist && docker compose -f docker-compose.prod.yml logs -f --tail=100"
 
 status-prod:    ## Show production container status
-	@. .gcp-outputs 2>/dev/null; gcloud compute ssh $${VM_NAME:-medassist-vm} --zone=$${GCP_ZONE:-us-central1-a} --project=$${GCP_PROJECT_ID:-medassist-ai-prod} --command="cd /opt/medassist && docker compose -f docker-compose.prod.yml ps"
+	@. .gcp-outputs 2>/dev/null; gcloud compute ssh $${VM_NAME:-medassist-vm} --zone=$${GCP_ZONE:-us-central1-c} --project=$${GCP_PROJECT_ID:-medassist-ai-prod} --command="cd /opt/medassist && docker compose -f docker-compose.prod.yml ps"
