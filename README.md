@@ -6,6 +6,37 @@ MedAssist AI is a full-stack, HIPAA-compliant medical assistant platform powered
 
 ---
 
+## Live Demo
+
+**URL:** http://medassist-ai.136.119.221.67.nip.io
+
+### Login Credentials
+
+All accounts use password: `Demo1234!`
+
+| Role | Email | Name |
+|------|-------|------|
+| **Admin** | admin@medassist.ai | System Admin |
+| **Doctor** | priya.sharma@medassist.ai | Dr. Priya Sharma (Internal Medicine) |
+| **Doctor** | thomas.mitchell@medassist.ai | Dr. Thomas Mitchell (Cardiology) |
+| **Doctor** | lisa.wong@medassist.ai | Dr. Lisa Wong (Endocrinology) |
+| **Doctor** | ahmed.hassan@medassist.ai | Dr. Ahmed Hassan (Pulmonology) |
+| **Doctor** | rachel.green@medassist.ai | Dr. Rachel Green (Neurology) |
+| **Patient** | sarah.johnson@medassist.ai | Sarah Johnson |
+| **Patient** | james.williams@medassist.ai | James Williams |
+| **Patient** | maria.garcia@medassist.ai | Maria Garcia |
+| **Patient** | robert.chen@medassist.ai | Robert Chen |
+| **Patient** | emily.davis@medassist.ai | Emily Davis |
+| **Patient** | michael.brown@medassist.ai | Michael Brown |
+| **Patient** | aisha.patel@medassist.ai | Aisha Patel |
+| **Patient** | david.kim@medassist.ai | David Kim |
+| **Patient** | jennifer.taylor@medassist.ai | Jennifer Taylor |
+| **Patient** | william.anderson@medassist.ai | William Anderson |
+
+Each patient has pre-loaded: vitals history, medical conditions, allergies, medications, appointments, care plans, medical reports with lab values, AI chat conversations, and symptom analysis sessions.
+
+---
+
 ## Key Features
 
 ### Symptom Analysis and Triage
