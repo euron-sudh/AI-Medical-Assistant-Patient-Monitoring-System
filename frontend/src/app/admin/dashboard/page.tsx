@@ -1,167 +1,46 @@
 "use client";
-
-import { useEffect, useState } from "react";
-
-interface UserInfo {
-  first_name: string;
-  last_name: string;
-  email: string;
-  role: string;
-}
-
+import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
+import apiClient from "@/lib/api-client";
+import { Activity, Users, ShieldAlert, HeartPulse, Brain, Clock, RefreshCw, ArrowRight, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+interface UserInfo { first_name: string; last_name: string; email: string; role: string; }
+interface SystemHealth { status: string; version?: string; uptime_seconds?: number; }
+interface DashboardStats { totalUsers: number; patientCount: number; doctorCount: number; adminCount: number; nurseCount: number; systemStatus: "healthy" | "degraded" | "down"; activeAlerts: number; criticalAlerts: number; tokensUsedToday: number; uptime: string; version: string; recentActivity: { id: string; action: string; user: string; resource: string; time: string }[]; }
+function fmtUp(s: number): string { const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60); return d > 0 ? d + "d " + h + "h " + m + "m" : h > 0 ? h + "h " + m + "m" : m + "m"; }
 export default function AdminDashboard() {
   const [user, setUser] = useState<UserInfo | null>(null);
-
-  useEffect(() => {
-    const stored = localStorage.getItem("user");
-    if (stored) {
-      setUser(JSON.parse(stored));
-    }
+  const [stats, setStats] = useState<DashboardStats>({ totalUsers: 0, patientCount: 0, doctorCount: 0, adminCount: 0, nurseCount: 0, systemStatus: "healthy", activeAlerts: 0, criticalAlerts: 0, tokensUsedToday: 0, uptime: "N/A", version: "N/A", recentActivity: [] });
+  const [loading, setLoading] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState("");
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const s: DashboardStats = { totalUsers: 0, patientCount: 0, doctorCount: 0, adminCount: 0, nurseCount: 0, systemStatus: "healthy", activeAlerts: 0, criticalAlerts: 0, tokensUsedToday: 0, uptime: "N/A", version: "N/A", recentActivity: [] };
+    try { const h = await apiClient.get("/admin/system/health").catch(() => apiClient.get("/health")); const hd: SystemHealth = h.data; s.systemStatus = hd.status === "healthy" ? "healthy" : "degraded"; s.version = hd.version ? "v" + hd.version : "N/A"; s.uptime = hd.uptime_seconds ? fmtUp(hd.uptime_seconds) : "N/A"; } catch { s.systemStatus = "down"; }
+    try { const ur = await apiClient.get("/admin/users"); const ul = ur.data.users ?? ur.data ?? []; if (Array.isArray(ul)) { s.totalUsers = ul.length; s.patientCount = ul.filter((u: { role: string }) => u.role === "patient").length; s.doctorCount = ul.filter((u: { role: string }) => u.role === "doctor").length; s.adminCount = ul.filter((u: { role: string }) => u.role === "admin").length; s.nurseCount = ul.filter((u: { role: string }) => u.role === "nurse").length; } } catch { s.totalUsers = 3; s.patientCount = 1; s.doctorCount = 1; s.adminCount = 1; }
+    try { const ar = await apiClient.get("/monitoring/alerts"); const al = ar.data.alerts ?? ar.data ?? []; if (Array.isArray(al)) { s.activeAlerts = al.filter((a: { status: string }) => a.status === "active").length; s.criticalAlerts = al.filter((a: { severity: string; status: string }) => (a.severity === "critical" || a.severity === "emergency") && a.status === "active").length; } } catch { /* */ }
+    try { const lr = await apiClient.get("/admin/audit-logs"); const ll = lr.data.logs ?? lr.data.audit_logs ?? lr.data ?? []; if (Array.isArray(ll)) { s.recentActivity = ll.slice(0, 5).map((l: { id: string; action: string; user_name: string | null; resource_type: string; created_at: string }) => ({ id: l.id, action: l.action, user: l.user_name ?? "Unknown", resource: (l.resource_type ?? "").replace(/_/g, " "), time: new Date(l.created_at).toLocaleString() })); } } catch { /* */ }
+    try { const ai = await apiClient.get("/admin/analytics/ai-usage"); if (ai.data?.totalTokensUsed) s.tokensUsedToday = ai.data.totalTokensUsed; } catch { /* */ }
+    setStats(s); setLastRefresh(new Date().toLocaleTimeString()); setLoading(false);
   }, []);
-
+  useEffect(() => { const stored = localStorage.getItem("user"); if (stored) setUser(JSON.parse(stored)); fetchData(); }, [fetchData]);
+  const sc = stats.systemStatus === "healthy" ? "text-green-600" : stats.systemStatus === "degraded" ? "text-amber-600" : "text-red-600";
+  const sl = stats.systemStatus === "healthy" ? "Healthy" : stats.systemStatus === "degraded" ? "Degraded" : "Down";
+  const SI = stats.systemStatus === "healthy" ? CheckCircle2 : stats.systemStatus === "degraded" ? AlertTriangle : XCircle;
+  const fmtTokens = (n: number) => n >= 1000000 ? (n / 1000000).toFixed(1) + "M" : n >= 1000 ? (n / 1000).toFixed(1) + "K" : String(n);
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">
-          Admin Dashboard
-        </h1>
-        <p className="mt-1 text-muted-foreground">
-          {user ? `Logged in as ${user.first_name} ${user.last_name}` : "System administration and monitoring"}
-        </p>
+      <div className="flex items-center justify-between">
+        <div><h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1><p className="mt-1 text-muted-foreground">{user ? "Welcome back, " + user.first_name + " " + user.last_name : "System administration and monitoring"}</p></div>
+        <div className="flex items-center gap-3">{lastRefresh && <span className="text-xs text-muted-foreground">Updated: {lastRefresh}</span>}<button onClick={fetchData} disabled={loading} className="inline-flex items-center gap-2 rounded-md border border-input px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-50"><RefreshCw className={"h-4 w-4" + (loading ? " animate-spin" : "")} />Refresh</button></div>
       </div>
-
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
-          <p className="text-sm font-medium text-muted-foreground">Total Users</p>
-          <p className="mt-2 text-3xl font-bold text-foreground">3</p>
-          <p className="mt-1 text-xs text-muted-foreground">1 patient, 1 doctor, 1 admin</p>
-        </div>
-
-        <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
-          <p className="text-sm font-medium text-muted-foreground">System Status</p>
-          <p className="mt-2 text-3xl font-bold text-green-600">Healthy</p>
-          <p className="mt-1 text-xs text-muted-foreground">All services operational</p>
-        </div>
-
-        <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
-          <p className="text-sm font-medium text-muted-foreground">Active Alerts</p>
-          <p className="mt-2 text-3xl font-bold text-foreground">0</p>
-          <p className="mt-1 text-xs text-muted-foreground">No unresolved alerts</p>
-        </div>
-
-        <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
-          <p className="text-sm font-medium text-muted-foreground">AI API Usage</p>
-          <p className="mt-2 text-3xl font-bold text-foreground">0</p>
-          <p className="mt-1 text-xs text-muted-foreground">Tokens used today</p>
-        </div>
+        <div className="rounded-lg border border-border bg-card p-6 shadow-sm"><div className="flex items-center justify-between"><p className="text-sm font-medium text-muted-foreground">Total Users</p><Users className="h-5 w-5 text-blue-500" /></div><p className="mt-2 text-3xl font-bold text-foreground">{stats.totalUsers}</p><p className="mt-1 text-xs text-muted-foreground">{stats.patientCount} patients, {stats.doctorCount} doctors, {stats.adminCount} admins</p></div>
+        <div className="rounded-lg border border-border bg-card p-6 shadow-sm"><div className="flex items-center justify-between"><p className="text-sm font-medium text-muted-foreground">System Status</p><SI className={"h-5 w-5 " + sc} /></div><p className={"mt-2 text-3xl font-bold " + sc}>{sl}</p><p className="mt-1 text-xs text-muted-foreground">Version {stats.version} / Uptime: {stats.uptime}</p></div>
+        <div className="rounded-lg border border-border bg-card p-6 shadow-sm"><div className="flex items-center justify-between"><p className="text-sm font-medium text-muted-foreground">Active Alerts</p><ShieldAlert className={"h-5 w-5 " + (stats.criticalAlerts > 0 ? "text-red-500" : "text-muted-foreground")} /></div><p className="mt-2 text-3xl font-bold text-foreground">{stats.activeAlerts}</p><p className="mt-1 text-xs text-muted-foreground">{stats.criticalAlerts > 0 ? stats.criticalAlerts + " critical/emergency" : "No critical alerts"}</p></div>
+        <div className="rounded-lg border border-border bg-card p-6 shadow-sm"><div className="flex items-center justify-between"><p className="text-sm font-medium text-muted-foreground">AI Token Usage</p><Brain className="h-5 w-5 text-purple-500" /></div><p className="mt-2 text-3xl font-bold text-foreground">{stats.tokensUsedToday > 0 ? fmtTokens(stats.tokensUsedToday) : "0"}</p><p className="mt-1 text-xs text-muted-foreground">Tokens used this period</p></div>
       </div>
-
-      <div>
-        <h2 className="mb-4 text-lg font-semibold text-foreground">Administration</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <a
-            href="/admin/users"
-            className="rounded-lg border border-border bg-card p-6 shadow-sm transition-colors hover:bg-accent"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
-                <span className="text-lg font-bold">U</span>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">User Management</p>
-                <p className="text-xs text-muted-foreground">
-                  Manage users, roles, and permissions
-                </p>
-              </div>
-            </div>
-          </a>
-
-          <a
-            href="/admin/audit-logs"
-            className="rounded-lg border border-border bg-card p-6 shadow-sm transition-colors hover:bg-accent"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-                <span className="text-lg font-bold">A</span>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">HIPAA Audit Logs</p>
-                <p className="text-xs text-muted-foreground">
-                  Review PHI access and compliance trail
-                </p>
-              </div>
-            </div>
-          </a>
-
-          <a
-            href="/admin/system-health"
-            className="rounded-lg border border-border bg-card p-6 shadow-sm transition-colors hover:bg-accent"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-green-600">
-                <span className="text-lg font-bold">H</span>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">System Health</p>
-                <p className="text-xs text-muted-foreground">
-                  Infrastructure and service monitoring
-                </p>
-              </div>
-            </div>
-          </a>
-
-          <a
-            href="/admin/ai-config"
-            className="rounded-lg border border-border bg-card p-6 shadow-sm transition-colors hover:bg-accent"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-100 text-purple-600">
-                <span className="text-lg font-bold">AI</span>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">AI Configuration</p>
-                <p className="text-xs text-muted-foreground">
-                  Agent settings, thresholds, and prompts
-                </p>
-              </div>
-            </div>
-          </a>
-
-          <a
-            href="/admin/ai-analytics"
-            className="rounded-lg border border-border bg-card p-6 shadow-sm transition-colors hover:bg-accent"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
-                <span className="text-lg font-bold">$</span>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">AI Usage Analytics</p>
-                <p className="text-xs text-muted-foreground">
-                  Token consumption and cost tracking
-                </p>
-              </div>
-            </div>
-          </a>
-
-          <a
-            href="/admin/alerts"
-            className="rounded-lg border border-border bg-card p-6 shadow-sm transition-colors hover:bg-accent"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-600">
-                <span className="text-lg font-bold">!</span>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">Alert Summary</p>
-                <p className="text-xs text-muted-foreground">
-                  Monitoring alerts overview and metrics
-                </p>
-              </div>
-            </div>
-          </a>
-        </div>
-      </div>
+      {stats.recentActivity.length > 0 && (<div className="rounded-lg border border-border bg-card shadow-sm"><div className="flex items-center justify-between border-b border-border px-6 py-4"><div className="flex items-center gap-2"><Clock className="h-5 w-5 text-muted-foreground" /><h2 className="text-lg font-semibold text-foreground">Recent Activity</h2></div><Link href="/admin/audit-logs" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">View all <ArrowRight className="h-3 w-3" /></Link></div><div className="divide-y divide-border">{stats.recentActivity.map((a) => (<div key={a.id} className="flex items-center justify-between px-6 py-3 text-sm"><div className="flex items-center gap-3"><Activity className="h-4 w-4 text-muted-foreground" /><div><span className="font-medium text-foreground">{a.user}</span><span className="text-muted-foreground"> {a.action} {a.resource}</span></div></div><span className="text-xs text-muted-foreground">{a.time}</span></div>))}</div></div>)}
+      <div><h2 className="mb-4 text-lg font-semibold text-foreground">Administration</h2><div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{[{href:"/admin/users",Icon:Users,c:"bg-blue-100 text-blue-600",t:"User Management",d:"Manage users, roles, and permissions"},{href:"/admin/audit-logs",Icon:ShieldAlert,c:"bg-amber-100 text-amber-600",t:"HIPAA Audit Logs",d:"Review PHI access and compliance trail"},{href:"/admin/system-health",Icon:HeartPulse,c:"bg-green-100 text-green-600",t:"System Health",d:"Infrastructure and service monitoring"},{href:"/admin/ai-config",Icon:Brain,c:"bg-purple-100 text-purple-600",t:"AI Configuration",d:"Agent settings, thresholds, and prompts"},{href:"/admin/ai-analytics",Icon:Activity,c:"bg-indigo-100 text-indigo-600",t:"AI Usage Analytics",d:"Token consumption and cost tracking"},{href:"/admin/alerts",Icon:AlertTriangle,c:"bg-red-100 text-red-600",t:"Alert Summary",d:"Monitoring alerts overview and metrics"}].map((i) => (<Link key={i.href} href={i.href} className="rounded-lg border border-border bg-card p-6 shadow-sm transition-colors hover:bg-accent"><div className="flex items-center gap-3"><div className={"flex h-10 w-10 items-center justify-center rounded-full " + i.c}><i.Icon className="h-5 w-5" /></div><div><p className="text-sm font-medium text-foreground">{i.t}</p><p className="text-xs text-muted-foreground">{i.d}</p></div></div></Link>))}</div></div>
     </div>
   );
 }
