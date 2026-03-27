@@ -22,7 +22,12 @@ def create_app(config_name: str | None = None) -> Flask:
         config_name = os.getenv("FLASK_ENV", "development")
 
     app = Flask(__name__)
-    app.config.from_object(config_map[config_name])
+    config_class = config_map[config_name]
+    app.config.from_object(config_class)
+
+    # Run production safety checks (e.g. reject default secrets)
+    if hasattr(config_class, "init_app"):
+        config_class.init_app(app)
 
     # Initialize extensions
     _register_extensions(app)
@@ -49,8 +54,9 @@ def _register_extensions(app: Flask) -> None:
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    cors.init_app(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
-    socketio.init_app(app, cors_allowed_origins="*")
+    allowed_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3055").split(",")
+    cors.init_app(app, resources={r"/api/*": {"origins": allowed_origins}}, supports_credentials=True)
+    socketio.init_app(app, cors_allowed_origins=allowed_origins)
     limiter.init_app(app)
 
 

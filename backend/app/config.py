@@ -122,6 +122,23 @@ class ProductionConfig(BaseConfig):
         "pool_recycle": 3600,
     }
 
+    def __init_subclass__(cls, **kwargs: object) -> None:
+        super().__init_subclass__(**kwargs)
+
+    @classmethod
+    def init_app(cls, app: object) -> None:
+        """Validate that secrets have been changed from defaults."""
+        if cls.SECRET_KEY == "change-me-in-production":
+            raise RuntimeError(
+                "SECRET_KEY is still the default value. "
+                "Set a secure SECRET_KEY environment variable before running in production."
+            )
+        if cls.JWT_SECRET_KEY == "jwt-change-me-in-production":
+            raise RuntimeError(
+                "JWT_SECRET_KEY is still the default value. "
+                "Set a secure JWT_SECRET_KEY environment variable before running in production."
+            )
+
 
 config_map = {
     "development": DevelopmentConfig,
