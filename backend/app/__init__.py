@@ -30,6 +30,9 @@ def create_app(config_name: str | None = None) -> Flask:
     # Register blueprints
     _register_blueprints(app)
 
+    # Register WebSocket event handlers
+    _register_websocket_handlers()
+
     # Register error handlers
     _register_error_handlers(app)
 
@@ -94,6 +97,13 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(devices_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(admin_bp)
+
+
+def _register_websocket_handlers() -> None:
+    """Register Socket.IO event handlers for real-time features."""
+    from app.api.websocket import register_websocket_handlers
+
+    register_websocket_handlers(socketio)
 
 
 def _register_error_handlers(app: Flask) -> None:
