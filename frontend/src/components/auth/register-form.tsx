@@ -37,8 +37,8 @@ export function RegisterForm() {
       await apiClient.post<RegisterResponse>("/auth/register", {
         email: data.email,
         password: data.password,
-        firstName: data.firstName,
-        lastName: data.lastName,
+        first_name: data.firstName,
+        last_name: data.lastName,
         role: data.role,
         phone: data.phone || undefined,
       });
