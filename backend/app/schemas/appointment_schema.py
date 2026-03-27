@@ -70,3 +70,21 @@ class AppointmentListParams(BaseModel):
     end_date: datetime | None = None
     limit: int = Field(default=50, ge=1, le=500)
     offset: int = Field(default=0, ge=0)
+
+
+class ConfirmAppointmentRequest(BaseModel):
+    """Schema for confirming an appointment."""
+    send_notification: bool = Field(default=True)
+
+
+class RecurringAppointmentRequest(BaseModel):
+    """Schema for creating recurring appointments."""
+    patient_id: str
+    doctor_id: str
+    appointment_type: str = Field(default="in_person", pattern="^(in_person|telemedicine|follow_up|emergency)$")
+    first_scheduled_at: datetime
+    duration_minutes: int = Field(default=30, ge=5, le=480)
+    reason: str | None = Field(default=None, max_length=1000)
+    notes: str | None = Field(default=None, max_length=2000)
+    recurrence_pattern: str = Field(pattern="^(daily|weekly|biweekly|monthly)$")
+    occurrences: int = Field(default=4, ge=1, le=52)

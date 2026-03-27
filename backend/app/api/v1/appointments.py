@@ -20,7 +20,9 @@ from pydantic import ValidationError
 from app.schemas.appointment_schema import (
     AppointmentListParams,
     CancelAppointmentRequest,
+    ConfirmAppointmentRequest,
     CreateAppointmentRequest,
+    RecurringAppointmentRequest,
     UpdateAppointmentRequest,
 )
 from app.services.appointment_service import appointment_service
@@ -173,7 +175,9 @@ def cancel_appointment(appointment_id: str):
         return jsonify({"error": {"code": "VALIDATION_ERROR", "details": e.errors()}}), 400
 
     try:
-        appointment = appointment_service.cancel_appointment(appt_uuid, current_user_id, data)
+        appointment = appointment_service.cancel_appointment_with_notification(
+            appt_uuid, current_user_id, data
+        )
     except ValueError as e:
         return jsonify({"error": {"code": "BAD_REQUEST", "message": str(e)}}), 400
 
@@ -221,3 +225,71 @@ def get_upcoming_appointments(patient_id: str):
     limit = request.args.get("limit", 10, type=int)
     appointments = appointment_service.get_upcoming(patient_uuid, limit=min(limit, 50))
     return jsonify([a.model_dump(mode="json") for a in appointments]), 200
+
+
+@bp.route("/check-availability", methods=["POST"])
+@jwt_required()
+def check_availability():
+    """Check doctor availability before booking an appointment."""
+    body = request.get_json()
+    if not body:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Request body is required"}}), 400
+    doctor_id_str = body.get("doctor_id")
+    scheduled_at_str = body.get("scheduled_at")
+    duration_minutes = body.get("duration_minutes", 30)
+    if not doctor_id_str or not scheduled_at_str:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "doctor_id and scheduled_at are required"}}), 400
+    try:
+        doctor_uuid = uuid.UUID(doctor_id_str)
+    except ValueError:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Invalid doctor ID"}}), 400
+    try:
+        scheduled_at = datetime.fromisoformat(scheduled_at_str)
+    except ValueError:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Invalid scheduled_at format"}}), 400
+    result = appointment_service.check_doctor_availability(doctor_uuid, scheduled_at, duration_minutes)
+    return jsonify(result), 200
+
+
+@bp.route("/<appointment_id>/confirm", methods=["PUT"])
+@jwt_required()
+def confirm_appointment(appointment_id: str):
+    """Confirm a scheduled appointment and send notification."""
+    try:
+        appt_uuid = uuid.UUID(appointment_id)
+    except ValueError:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Invalid appointment ID"}}), 400
+    claims = get_jwt()
+    current_user_id = uuid.UUID(get_jwt_identity())
+    role = claims.get("role", "")
+    if not appointment_service.check_appointment_access(appt_uuid, current_user_id, role):
+        return jsonify({"error": {"code": "FORBIDDEN", "message": "Access denied"}}), 403
+    try:
+        data = ConfirmAppointmentRequest.model_validate(request.get_json() or {})
+    except ValidationError as e:
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "details": e.errors()}}), 400
+    try:
+        appointment = appointment_service.confirm_appointment(appt_uuid, current_user_id, send_notification=data.send_notification)
+    except ValueError as e:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": str(e)}}), 400
+    return jsonify(appointment.model_dump(mode="json")), 200
+
+
+@bp.route("/recurring", methods=["POST"])
+@jwt_required()
+def create_recurring_appointments():
+    """Create a series of recurring appointments."""
+    try:
+        data = RecurringAppointmentRequest.model_validate(request.get_json())
+    except ValidationError as e:
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "details": e.errors()}}), 400
+    claims = get_jwt()
+    current_user_id = uuid.UUID(get_jwt_identity())
+    role = claims.get("role", "")
+    if role == "patient" and data.patient_id != str(current_user_id):
+        return jsonify({"error": {"code": "FORBIDDEN", "message": "Patients can only book their own appointments"}}), 403
+    try:
+        appointments = appointment_service.create_recurring_appointments(data, created_by=current_user_id)
+    except ValueError as e:
+        return jsonify({"error": {"code": "CONFLICT", "message": str(e)}}), 409
+    return jsonify([a.model_dump(mode="json") for a in appointments]), 201

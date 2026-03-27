@@ -2,7 +2,15 @@
 
 Agents:
     - SymptomAnalystAgent: Symptom analysis with differential diagnosis
+    - SpecialtyAgent: Domain-constrained specialist AI doctors (8 specialties)
+    - ReportReaderAgent: Medical report analysis and lab value interpretation
+    - TriageAgent: Emergency triage and severity classification
     - AgentOrchestrator: Routes requests to the correct specialist agent
 
-See .claude/rules/07-agents.md for the full agent architecture specification.
+Guardrails:
+    - Domain boundary enforcement
+    - Controlled substance blocking
+    - Mandatory disclaimers
+    - Confidence thresholds
+    - Emergency detection
 """

@@ -55,15 +55,25 @@ def create_care_plan():
 @jwt_required()
 @require_role(["patient", "doctor", "nurse", "admin"])
 def get_care_plan(plan_id: str):
+    # First try as a care plan ID
     try:
         plan = care_plan_service.get_care_plan(plan_id)
-    except ValueError as e:
-        return jsonify({"error": {"code": "NOT_FOUND", "message": str(e)}}), 404
-    raw = care_plan_service._get_plan_or_raise(plan_id)
+        raw = care_plan_service._get_plan_or_raise(plan_id)
+        claims = get_jwt()
+        if not care_plan_service.check_access(get_jwt_identity(), claims.get("role", ""), plan=raw):
+            return jsonify({"error": {"code": "FORBIDDEN", "message": "Access denied"}}), 403
+        return jsonify(plan.model_dump()), 200
+    except ValueError:
+        pass
+
+    # Fallback: treat as patient_id and return their care plans
     claims = get_jwt()
-    if not care_plan_service.check_access(get_jwt_identity(), claims.get("role", ""), plan=raw):
+    requester_id = get_jwt_identity()
+    role = claims.get("role", "")
+    if role == "patient" and str(requester_id) != str(plan_id):
         return jsonify({"error": {"code": "FORBIDDEN", "message": "Access denied"}}), 403
-    return jsonify(plan.model_dump()), 200
+    plans = care_plan_service.list_care_plans(patient_id=plan_id)
+    return jsonify({"care_plans": [p.model_dump() for p in plans]}), 200
 
 
 @bp.route("/<plan_id>", methods=["PUT"])

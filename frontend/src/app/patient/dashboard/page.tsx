@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import apiClient from "@/lib/api-client";
 import type { User } from "@/types/auth";
+import JourneyTracker from "@/components/shared/JourneyTracker";
 
 const JOURNEY_STORAGE_STEP = "medassist_journey_step";
 const JOURNEY_STORAGE_SPECIALTY = "medassist_specialty";
@@ -316,66 +317,8 @@ export default function PatientDashboard() {
         </button>
       </div>
 
-      {/* Patient Journey Tracker */}
-      <section
-        className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6"
-        aria-label="Patient journey progress"
-      >
-        <div className="mb-4 flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-primary" aria-hidden />
-          <h2 className="text-base font-semibold text-foreground">Patient Journey Tracker</h2>
-        </div>
-        {loadingMain ? (
-          <JourneySkeleton />
-        ) : (
-          <div className="overflow-x-auto pb-2">
-            <ol className="flex min-w-[720px] items-start sm:min-w-0">
-              {JOURNEY_STEPS.map((label, index) => {
-                const isDone = index < currentStepIndex;
-                const isCurrent = index === currentStepIndex;
-                const isFuture = index > currentStepIndex;
-                const lineDone = index > 0 && index <= currentStepIndex;
-                return (
-                  <li key={label} className="flex min-w-0 flex-1 items-start">
-                    {index > 0 && (
-                      <div
-                        className={`mx-1 mt-[14px] h-0.5 flex-1 sm:mt-[15px] ${
-                          lineDone ? "bg-emerald-500" : "bg-border"
-                        }`}
-                        aria-hidden
-                      />
-                    )}
-                    <div className="flex w-[52px] shrink-0 flex-col items-center sm:w-auto sm:min-w-[76px] sm:flex-1">
-                      <div
-                        className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-semibold sm:h-8 sm:w-8 ${
-                          isDone
-                            ? "border-emerald-500 bg-emerald-500 text-white"
-                            : isCurrent
-                            ? "border-primary bg-primary text-primary-foreground ring-2 ring-primary/30 ring-offset-2 ring-offset-card"
-                            : "border-muted-foreground/30 bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {isDone ? <Check className="h-4 w-4" strokeWidth={3} /> : index + 1}
-                      </div>
-                      <span
-                        className={`mt-2 text-center text-[10px] font-medium leading-tight sm:text-xs ${
-                          isFuture
-                            ? "text-muted-foreground"
-                            : isCurrent
-                            ? "text-primary"
-                            : "text-foreground"
-                        }`}
-                      >
-                        {label}
-                      </span>
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          </div>
-        )}
-      </section>
+      {/* Patient Journey Tracker - Enhanced */}
+      <JourneyTracker currentStep={currentStepIndex} loading={loadingMain} />
 
       {/* Quick stats */}
       <section aria-label="Quick stats">

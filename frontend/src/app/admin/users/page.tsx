@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import apiClient from "@/lib/api-client";
+import { Users as UsersIcon, Search, RefreshCw, Eye, UserCheck, UserX } from "lucide-react";
 
 interface User {
   id: string;

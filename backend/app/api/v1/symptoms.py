@@ -33,7 +33,7 @@ def _check_patient_access(patient_id: str) -> tuple | None:
     current_user_id = get_jwt_identity()
     role = claims.get("role")
 
-    if role == "patient" and current_user_id != patient_id:
+    if role == "patient" and str(current_user_id) != str(patient_id):
         return jsonify({
             "error": {"code": "FORBIDDEN", "message": "Cannot access other patient's symptom sessions"}
         }), 403

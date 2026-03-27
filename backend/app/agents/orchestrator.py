@@ -14,14 +14,41 @@ import structlog
 from app.agents.base_agent import AgentInput, AgentOutput
 from app.agents.prompts.system_prompts import ORCHESTRATOR_SYSTEM_PROMPT
 from app.agents.symptom_analyst import SymptomAnalystAgent
+from app.agents.report_reader import ReportReaderAgent
+from app.agents.triage_agent import TriageAgent
+from app.agents.specialty_agent import SpecialtyAgent
+from app.agents.specialty_config import match_specialty_from_symptoms, get_all_specialties
 from app.integrations.openai_client import OpenAIClient, OpenAIClientError
 
 logger = structlog.get_logger(__name__)
 
 
-# Agent type to class mapping — extend as new agents are added
+def _specialty_factory(specialty: str):
+    """Create a factory class for a specialty agent."""
+    class _Factory:
+        model = "gpt-4o-mini"
+        def __init__(self, openai_client=None):
+            self._agent = SpecialtyAgent(specialty=specialty, openai_client=openai_client)
+        def run(self, agent_input):
+            return self._agent.run(agent_input)
+    _Factory.__name__ = f"SpecialtyAgent_{specialty}"
+    return _Factory
+
+
+# Agent type to class mapping — all registered agents
 AGENT_REGISTRY: dict[str, type] = {
     "symptom_analyst": SymptomAnalystAgent,
+    "report_reader": ReportReaderAgent,
+    "triage": TriageAgent,
+    # Specialty agents
+    "general_physician": _specialty_factory("general_physician"),
+    "cardiology": _specialty_factory("cardiology"),
+    "orthopedics": _specialty_factory("orthopedics"),
+    "gynecology": _specialty_factory("gynecology"),
+    "dermatology": _specialty_factory("dermatology"),
+    "pediatrics": _specialty_factory("pediatrics"),
+    "neurology": _specialty_factory("neurology"),
+    "psychiatry": _specialty_factory("psychiatry"),
 }
 
 
