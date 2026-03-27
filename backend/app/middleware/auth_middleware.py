@@ -46,6 +46,24 @@ def require_role(allowed_roles: list[str]) -> Callable:
     return decorator
 
 
+def require_auth(fn: Callable) -> Callable:
+    """Decorator that requires a valid JWT token (any role).
+
+    Usage:
+        @bp.route("/protected")
+        @require_auth
+        def protected_route():
+            ...
+    """
+
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        verify_jwt_in_request()
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
 def get_current_user_role() -> str:
     """Extract the current user's role from JWT claims.
 
