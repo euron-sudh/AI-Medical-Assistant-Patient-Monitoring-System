@@ -16,13 +16,20 @@ with app.app_context():
     if User.query.count() == 0:
         print("Empty database detected — seeding demo data...")
         try:
-            # Create 3 test users
+            # Create 3 test users (emails must match the login form test credentials)
             for email, fname, lname, role in [
                 ("patient@demo.dev", "Demo", "Patient", "patient"),
                 ("doctor@demo.dev", "Dr. Demo", "Doctor", "doctor"),
                 ("admin@demo.dev", "Demo", "Admin", "admin"),
             ]:
-                u = User(email=email, first_name=fname, last_name=lname, role=role)
+                u = User(
+                    email=email,
+                    first_name=fname,
+                    last_name=lname,
+                    role=role,
+                    is_active=True,
+                    is_verified=True,
+                )
                 u.set_password("Demo1234!")
                 db.session.add(u)
             db.session.commit()

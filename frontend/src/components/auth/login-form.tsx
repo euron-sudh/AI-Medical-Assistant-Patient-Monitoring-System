@@ -133,49 +133,51 @@ export function LoginForm() {
         Watch Product Demo
       </Link>
 
-      <div className="mt-6 rounded-md border border-border bg-muted/50 p-4">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Test Accounts (click to fill)
-        </p>
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => fillTestCredentials("patient@demo.dev", "Demo1234!")}
-            className="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-left text-sm hover:bg-accent"
-          >
-            <div>
-              <span className="font-medium text-foreground">Patient</span>
-              <span className="ml-2 text-muted-foreground">patient@demo.dev</span>
-            </div>
-            <span className="text-xs text-muted-foreground">Demo1234!</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => fillTestCredentials("doctor@demo.dev", "Demo1234!")}
-            className="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-left text-sm hover:bg-accent"
-          >
-            <div>
-              <span className="font-medium text-foreground">Doctor</span>
-              <span className="ml-2 text-muted-foreground">doctor@demo.dev</span>
-            </div>
-            <span className="text-xs text-muted-foreground">Demo1234!</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => fillTestCredentials("admin@demo.dev", "Demo1234!")}
-            className="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-left text-sm hover:bg-accent"
-          >
-            <div>
-              <span className="font-medium text-foreground">Admin</span>
-              <span className="ml-2 text-muted-foreground">admin@demo.dev</span>
-            </div>
-            <span className="text-xs text-muted-foreground">Demo1234!</span>
-          </button>
+      {process.env.NODE_ENV !== 'production' && (
+        <div className="mt-6 rounded-md border border-border bg-muted/50 p-4">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Test Accounts (click to fill)
+          </p>
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => fillTestCredentials("patient@demo.dev", "Demo1234!")}
+              className="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-left text-sm hover:bg-accent"
+            >
+              <div>
+                <span className="font-medium text-foreground">Patient</span>
+                <span className="ml-2 text-muted-foreground">patient@demo.dev</span>
+              </div>
+              <span className="text-xs text-muted-foreground">Demo1234!</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => fillTestCredentials("doctor@demo.dev", "Demo1234!")}
+              className="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-left text-sm hover:bg-accent"
+            >
+              <div>
+                <span className="font-medium text-foreground">Doctor</span>
+                <span className="ml-2 text-muted-foreground">doctor@demo.dev</span>
+              </div>
+              <span className="text-xs text-muted-foreground">Demo1234!</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => fillTestCredentials("admin@demo.dev", "Demo1234!")}
+              className="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-left text-sm hover:bg-accent"
+            >
+              <div>
+                <span className="font-medium text-foreground">Admin</span>
+                <span className="ml-2 text-muted-foreground">admin@demo.dev</span>
+              </div>
+              <span className="text-xs text-muted-foreground">Demo1234!</span>
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Register new accounts at <a href="/register" className="underline hover:text-foreground">/register</a>
+          </p>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Register new accounts at <a href="/register" className="underline hover:text-foreground">/register</a>
-        </p>
-      </div>
+      )}
     </form>
   );
 }

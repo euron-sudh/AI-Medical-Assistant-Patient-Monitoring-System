@@ -20,7 +20,8 @@ import logging
 from datetime import datetime, timezone
 
 from flask import request
-from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask_jwt_extended import decode_token
+from flask_socketio import SocketIO, emit, join_room, leave_room, disconnect
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +38,31 @@ def register_vitals_handlers(sio: SocketIO) -> None:
 
     @sio.on("connect", namespace=NAMESPACE)
     def handle_connect(auth: dict | None = None) -> None:
+        """Authenticate WebSocket connections via JWT token.
+
+        The client must provide a token either in the auth dict ({"token": "..."})
+        or as a query parameter (?token=...).
+        """
+        token = None
+        if auth and isinstance(auth, dict):
+            token = auth.get("token")
+        if not token:
+            token = request.args.get("token")
+        if not token:
+            logger.warning("WebSocket connection rejected — no auth token provided")
+            disconnect()
+            return
+        try:
+            decoded = decode_token(token)
+            if decoded.get("type") != "access":
+                raise ValueError("Not an access token")
+        except Exception as e:
+            logger.warning("WebSocket connection rejected — invalid token: %s", e)
+            disconnect()
+            return
+
         sid = request.sid
-        logger.info("Client connected to /vitals  sid=%s", sid)
+        logger.info("Client connected to /vitals  sid=%s  user=%s", sid, decoded.get("sub"))
         emit("connected", {"status": "ok", "sid": sid})
 
     @sio.on("disconnect", namespace=NAMESPACE)

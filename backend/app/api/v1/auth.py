@@ -9,7 +9,7 @@ Routes:
 """
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, decode_token, create_access_token
 from pydantic import ValidationError
 
 from app.schemas.auth_schema import (
@@ -18,26 +18,28 @@ from app.schemas.auth_schema import (
     ChangePasswordRequest,
 )
 from app.services.auth_service import auth_service
+from app.middleware.rate_limiter import auth_rate_limit
 
 bp = Blueprint("auth", __name__, url_prefix="/api/v1/auth")
 
 
 @bp.route("/register", methods=["POST"])
+@auth_rate_limit
 def register():
-    """Register a new user account.
+    """Register a new patient account.
 
-    Accepts email, password, name, role. Returns the created user profile.
-    Admin role cannot be self-assigned — admins are created by other admins.
+    Only patient self-registration is allowed.
+    Doctor/nurse accounts must be created by an admin.
     """
     try:
         data = RegisterRequest.model_validate(request.get_json())
     except ValidationError as e:
         return jsonify({"error": {"code": "VALIDATION_ERROR", "details": e.errors()}}), 400
 
-    # Prevent self-registration as admin
-    if data.role == "admin":
+    # Only patients can self-register; doctor/nurse/admin accounts must be created by an admin
+    if data.role != "patient":
         return jsonify({
-            "error": {"code": "FORBIDDEN", "message": "Cannot self-register as admin"}
+            "error": {"code": "FORBIDDEN", "message": "Only patient accounts can be self-registered. Contact an admin for doctor/nurse accounts."}
         }), 403
 
     try:
@@ -49,6 +51,7 @@ def register():
 
 
 @bp.route("/login", methods=["POST"])
+@auth_rate_limit
 def login():
     """Authenticate and return JWT access + refresh tokens.
 
@@ -68,13 +71,34 @@ def login():
 
 
 @bp.route("/refresh", methods=["POST"])
-@jwt_required(refresh=True)
 def refresh():
     """Get a new access token using a valid refresh token.
 
-    Send the refresh token in the Authorization header.
+    Accepts the refresh token either in the Authorization header (standard)
+    or in the request body as {"refreshToken": "..."} (frontend compatibility).
     """
-    user_id = get_jwt_identity()
+    user_id = None
+
+    # Try body-based refresh token first (frontend sends {"refreshToken": "..."})
+    body = request.get_json(silent=True) or {}
+    body_token = body.get("refreshToken") or body.get("refresh_token")
+
+    if body_token:
+        try:
+            decoded = decode_token(body_token)
+            if decoded.get("type") != "refresh":
+                return jsonify({"error": {"code": "UNAUTHORIZED", "message": "Token is not a refresh token"}}), 401
+            user_id = decoded.get("sub")
+        except Exception:
+            return jsonify({"error": {"code": "UNAUTHORIZED", "message": "Invalid refresh token"}}), 401
+    else:
+        # Fall back to standard Authorization header approach
+        try:
+            from flask_jwt_extended import verify_jwt_in_request
+            verify_jwt_in_request(refresh=True)
+            user_id = get_jwt_identity()
+        except Exception:
+            return jsonify({"error": {"code": "UNAUTHORIZED", "message": "Refresh token required"}}), 401
 
     try:
         result = auth_service.refresh_tokens(user_id)
