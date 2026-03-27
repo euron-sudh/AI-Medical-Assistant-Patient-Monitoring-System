@@ -124,6 +124,8 @@ class DeviceService:
         if data.status is not None:
             # Ensure retired is allowed; rely on DB constraint for other invalid values
             device.status = data.status
+        if data.configuration is not None:
+            device.configuration = data.configuration
 
         try:
             db.session.add(device)
@@ -153,6 +155,26 @@ class DeviceService:
         except Exception:
             db.session.rollback()
             return None
+
+    def sync_device(
+        self,
+        actor_id: uuid.UUID,
+        actor_role: str,
+        device_id: uuid.UUID,
+        battery_level: int | None,
+    ) -> Device | None:
+        """Record a sync event: update last_sync_at and optionally battery_level."""
+        device = db.session.get(Device, device_id)
+        if device is None:
+            return None
+        if not self._check_device_access(actor_id, actor_role, device):
+            return None
+
+        device.last_sync_at = _now_utc()
+        if battery_level is not None:
+            device.battery_level = battery_level
+        db.session.commit()
+        return device
 
     def ingest_device_data(
         self,

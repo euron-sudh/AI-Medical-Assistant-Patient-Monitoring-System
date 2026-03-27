@@ -36,6 +36,11 @@ class UpdateDeviceRequest(BaseModel):
     # Soft state transition to "retired" is handled by DELETE endpoint,
     # but we also accept it here for convenience.
     status: str | None = Field(default=None)
+    configuration: dict[str, Any] | None = Field(default=None)
+
+
+class SyncDeviceRequest(BaseModel):
+    battery_level: int | None = Field(default=None, ge=0, le=100)
 
 
 class DeviceVitalsIngestItem(BaseModel):

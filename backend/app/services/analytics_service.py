@@ -182,11 +182,31 @@ class AnalyticsService:
 
         ai_assisted_diagnosis_count = reports_ai_count + telemed_ai_count
 
+        # Alert response times — average time from alert creation to acknowledgement
+        # for alerts belonging to this doctor's assigned patients
+        alert_response_stmt = (
+            select(
+                func.avg(
+                    func.extract('epoch', MonitoringAlert.acknowledged_at)
+                    - func.extract('epoch', MonitoringAlert.created_at)
+                ).label('avg_response_seconds')
+            )
+            .where(
+                and_(
+                    MonitoringAlert.patient_id.in_(assigned_patients_stmt),
+                    MonitoringAlert.acknowledged_at.is_not(None),
+                )
+            )
+        )
+        avg_response_seconds = db.session.execute(alert_response_stmt).scalar()
+        avg_alert_response_minutes = round(float(avg_response_seconds) / 60, 1) if avg_response_seconds else None
+
         return {
             "total_patients": total_patients,
             "consultations_this_month": consultations_this_month,
             "avg_consultation_duration_minutes": round(avg_consultation_duration, 1),
             "ai_assisted_diagnosis_count": ai_assisted_diagnosis_count,
+            "avg_alert_response_minutes": avg_alert_response_minutes,
         }
 
     def get_system_overview(self) -> dict[str, Any]:

@@ -6,7 +6,7 @@ from flask import Blueprint, jsonify
 from app.middleware.auth_middleware import require_auth, require_role
 from app.services.analytics_service import analytics_service
 
-bp = Blueprint("analytics", __name__, url_prefix="/analytics")
+bp = Blueprint("analytics", __name__, url_prefix="/api/v1/analytics")
 
 
 @bp.route("/patient/<uuid:patient_id>/overview", methods=["GET"])

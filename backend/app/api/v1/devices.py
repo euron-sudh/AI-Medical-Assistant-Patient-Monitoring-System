@@ -11,6 +11,7 @@ from app.schemas.device_schema import (
     DeviceVitalsIngestItem,
     DeviceVitalsBatchRequest,
     RegisterDeviceRequest,
+    SyncDeviceRequest,
     UpdateDeviceRequest,
 )
 from app.services.device_service import device_service
@@ -91,6 +92,28 @@ def retire_device(device_id: str):
         return jsonify({"error": {"code": "BAD_REQUEST", "message": "Invalid device ID"}}), 400
 
     device = device_service.retire_device(viewer_id, role, device_uuid)
+    if device is None:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": "Device not found or not accessible"}}), 404
+
+    return jsonify(device_service._device_to_dict(device)), 200
+
+
+@bp.route("/<device_id>/sync", methods=["POST"])
+@jwt_required()
+def sync_device(device_id: str):
+    """Record a sync event — update last_sync_at and optionally battery_level."""
+    viewer_id, role = _viewer()
+    try:
+        device_uuid = uuid.UUID(device_id)
+    except ValueError:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Invalid device ID"}}), 400
+
+    try:
+        data = SyncDeviceRequest.model_validate(request.get_json() or {})
+    except ValidationError as e:
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "details": e.errors()}}), 400
+
+    device = device_service.sync_device(viewer_id, role, device_uuid, data.battery_level)
     if device is None:
         return jsonify({"error": {"code": "NOT_FOUND", "message": "Device not found or not accessible"}}), 404
 
