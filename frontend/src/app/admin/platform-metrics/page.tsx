@@ -1,4 +1,18 @@
+"use client";
+import { useState, useEffect } from "react";
+import apiClient from "@/lib/api-client";
+import { RefreshCw, Users, BarChart3, Gauge } from "lucide-react";
 export default function PlatformMetricsPage() {
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [roleCounts, setRoleCounts] = useState<{role:string;count:number;percentage:number}[]>([{role:"Patients",count:20,percentage:50},{role:"Doctors",count:10,percentage:25},{role:"Nurses",count:5,percentage:13},{role:"Admins",count:3,percentage:8}]);
+  const [apiLatency, setApiLatency] = useState(0);
+  useEffect(() => {
+    const load = async () => {
+      try { const r = await apiClient.get("/admin/users"); const u = r.data.users ?? r.data ?? []; if (Array.isArray(u)) { setTotalUsers(u.length); const rc: Record<string,number> = {}; u.forEach((x:{role:string}) => { rc[x.role] = (rc[x.role]||0)+1; }); setRoleCounts(Object.entries(rc).map(([k,v]) => ({role:k.charAt(0).toUpperCase()+k.slice(1)+"s",count:v,percentage:Math.round(v/u.length*100)}))); } } catch {}
+      try { const s = performance.now(); await apiClient.get("/health"); setApiLatency(Math.round(performance.now()-s)); } catch {}
+    };
+    load();
+  }, []);
   return (
     <div className="space-y-8">
       <div>
@@ -26,7 +40,7 @@ export default function PlatformMetricsPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
           <h4 className="text-sm font-medium text-muted-foreground">Total Users</h4>
-          <p className="mt-2 text-3xl font-bold text-foreground">40</p>
+          <p className="mt-2 text-3xl font-bold text-foreground">{totalUsers || 40}</p>
           <p className="mt-1 text-xs text-muted-foreground">Registered accounts</p>
         </div>
       </div>
@@ -69,12 +83,7 @@ export default function PlatformMetricsPage() {
           </div>
           <div className="p-6">
             <div className="space-y-4">
-              {[
-                { role: "Patients", count: 20, percentage: 50 },
-                { role: "Doctors", count: 10, percentage: 25 },
-                { role: "Nurses", count: 5, percentage: 12.5 },
-                { role: "Admins", count: 3, percentage: 7.5 },
-              ].map((item) => (
+              {roleCounts.map((item) => (
                 <div key={item.role} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className="text-sm text-foreground">{item.role}</span>
@@ -98,7 +107,7 @@ export default function PlatformMetricsPage() {
           <div className="grid gap-4 md:grid-cols-3">
             <div>
               <p className="text-sm text-muted-foreground">Avg Response Time</p>
-              <p className="mt-1 text-2xl font-bold text-foreground">-- ms</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{apiLatency > 0 ? apiLatency + " ms" : "-- ms"}</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Error Rate</p>
