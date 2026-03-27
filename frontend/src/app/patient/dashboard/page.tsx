@@ -1,60 +1,51 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   ArrowRight,
   Calendar,
   Check,
-  ChevronRight,
-  ClipboardList,
-  FileText,
+  Circle,
   Pill,
   Sparkles,
   Stethoscope,
 } from "lucide-react";
 import apiClient from "@/lib/api-client";
-import type { User } from "@/types/auth";
-import JourneyTracker from "@/components/shared/JourneyTracker";
+import SpecialtySelector from "@/components/shared/SpecialtySelector";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
-const JOURNEY_STORAGE_STEP = "medassist_journey_step";
-const JOURNEY_STORAGE_SPECIALTY = "medassist_specialty";
+interface UserInfo {
+  first_name: string;
+  last_name: string;
+  email: string;
+  role: string;
+  id?: string;
+  patient_id?: string;
+}
 
-const JOURNEY_STEPS = [
-  "Select Specialty",
-  "Describe Symptoms",
-  "Tests Recommended",
-  "Upload Reports",
-  "AI Analysis",
-  "Advice/Referral",
-] as const;
-
-const MEDICAL_SPECIALTIES: { value: string; label: string }[] = [
-  { value: "primary_care", label: "Primary Care" },
-  { value: "cardiology", label: "Cardiology" },
-  { value: "dermatology", label: "Dermatology" },
-  { value: "neurology", label: "Neurology" },
-  { value: "orthopedics", label: "Orthopedics" },
-  { value: "pediatrics", label: "Pediatrics" },
-  { value: "psychiatry", label: "Psychiatry" },
-  { value: "gastroenterology", label: "Gastroenterology" },
-  { value: "endocrinology", label: "Endocrinology" },
-  { value: "pulmonology", label: "Pulmonology" },
-  { value: "emergency", label: "Urgent / Emergency" },
-];
-
-interface SymptomSessionRow {
+interface SymptomSession {
   id: string;
   status: string;
   chief_complaint?: string | null;
+  initial_complaint?: string | null;
   ai_analysis?: Record<string, unknown> | null;
   recommended_action?: string | null;
+  triage_level?: string | null;
   conversation_log?: unknown;
-  created_at?: string;
-  updated_at?: string;
+  created_at: string;
+}
+
+interface ReportRow {
+  id: string;
+  title: string;
+  report_type: string;
+  status: string;
+  ai_summary?: string | null;
+  ai_analysis?: Record<string, unknown> | null;
+  created_at: string;
 }
 
 interface MedicationRow {
@@ -66,240 +57,274 @@ interface MedicationRow {
   status: string;
 }
 
+interface VitalsReading {
+  heart_rate: number | null;
+  blood_pressure_systolic?: number | null;
+  blood_pressure_diastolic?: number | null;
+  spo2?: number | null;
+  oxygen_saturation?: number | null;
+  temperature?: number | null;
+  recorded_at: string;
+}
+
 interface AppointmentRow {
   id: string;
   scheduled_at: string;
   status: string;
   doctor_name?: string;
-  doctor?: { first_name?: string; last_name?: string; name?: string };
   appointment_type?: string;
 }
 
-interface VitalsRow {
-  heart_rate?: number | null;
-  blood_pressure_systolic?: number | null;
-  blood_pressure_diastolic?: number | null;
-  oxygen_saturation?: number | null;
-  spo2?: number | null;
-  temperature?: number | null;
-  recorded_at?: string;
-}
+const JOURNEY_LABELS = [
+  "Select Specialty",
+  "Describe Symptoms",
+  "Tests Recommended",
+  "Upload Reports",
+  "AI Analysis",
+  "Advice / Referral",
+] as const;
 
-interface ReportRow {
-  id: string;
-  title: string;
-  ai_summary?: string | null;
-  status?: string;
-  created_at?: string;
-}
-
-function getPatientId(user: User | null): string | null {
-  if (!user) return null;
-  return user.id;
-}
-
-function conversationLogLength(log: unknown): number {
+function parseConversationLen(log: unknown): number {
   if (Array.isArray(log)) return log.length;
-  if (log && typeof log === "object" && "messages" in log) {
-    const m = (log as { messages?: unknown }).messages;
-    if (Array.isArray(m)) return m.length;
-  }
   return 0;
 }
 
-/** Maps an in-progress session to a journey index (0–5) for display labels. */
-function sessionStageIndex(s: SymptomSessionRow): number {
-  if (s.status === "completed") return 5;
-  const hasAnalysis =
-    s.ai_analysis != null && Object.keys(s.ai_analysis as object).length > 0;
-  if (hasAnalysis) return 4;
-  if (s.recommended_action) return 2;
-  if (conversationLogLength(s.conversation_log) > 2) return 2;
-  return 1;
+function computeJourney(
+  specialtyKey: string | null,
+  sessions: SymptomSession[],
+  reports: ReportRow[]
+): { completed: boolean[]; currentIndex: number; allDone: boolean } {
+  const completed = [false, false, false, false, false, false];
+
+  const hasSpecialty = specialtyKey != null && specialtyKey.length > 0;
+  const hasAnySession = sessions.length > 0;
+  completed[0] = hasSpecialty || hasAnySession;
+
+  const inProgress = sessions.some((s) => s.status === "in_progress");
+  const hasCompleted = sessions.some((s) => s.status === "completed");
+  const describeDone =
+    inProgress ||
+    hasCompleted ||
+    sessions.some((s) => parseConversationLen(s.conversation_log) > 0 || !!s.chief_complaint);
+  completed[1] = describeDone;
+
+  const testsDone = sessions.some(
+    (s) =>
+      (s.ai_analysis != null && Object.keys(s.ai_analysis).length > 0) ||
+      (s.recommended_action != null && s.recommended_action.length > 0) ||
+      s.triage_level != null
+  );
+  completed[2] = testsDone;
+
+  completed[3] = reports.length > 0;
+
+  const analysisDone = reports.some(
+    (r) => (r.ai_analysis != null && Object.keys(r.ai_analysis).length > 0) || r.status === "completed"
+  );
+  completed[4] = analysisDone;
+
+  completed[5] = hasCompleted;
+
+  let currentIndex = 0;
+  for (let i = 0; i < 6; i += 1) {
+    if (!completed[i]) {
+      currentIndex = i;
+      break;
+    }
+    currentIndex = i;
+  }
+  const allDone = completed.every(Boolean);
+  if (allDone) {
+    return { completed, currentIndex: 5, allDone: true };
+  }
+  return { completed, currentIndex, allDone: false };
 }
 
-function sessionStageLabel(s: SymptomSessionRow): string {
-  const idx = sessionStageIndex(s);
-  return JOURNEY_STEPS[idx] ?? "In progress";
+function sessionStageLabel(s: SymptomSession): string {
+  if (s.status === "completed") return "Advice / referral ready";
+  if (s.ai_analysis && Object.keys(s.ai_analysis).length > 0) return "AI analysis";
+  if (s.recommended_action) return "Recommendations";
+  if (s.triage_level) return "Triage & tests";
+  return "Describe symptoms";
 }
 
-function readStoredJourneyStep(): number {
-  if (typeof window === "undefined") return 0;
-  const raw = localStorage.getItem(JOURNEY_STORAGE_STEP);
-  const n = raw ? parseInt(raw, 10) : 0;
-  if (Number.isNaN(n) || n < 0) return 0;
-  return Math.min(n, 5);
+function countMedsDueToday(meds: MedicationRow[]): number {
+  return meds.filter(
+    (m) =>
+      m.status === "active" &&
+      /daily|once|every day|each day|qd|bid|tid|qid|q\s*d|morning|evening|weekly/i.test(
+        m.frequency ?? ""
+      )
+  ).length;
+}
+
+function formatVitalsSummary(v: VitalsReading | null): string {
+  if (!v) return "No readings yet";
+  const parts: string[] = [];
+  if (v.heart_rate != null) parts.push(`HR ${v.heart_rate}`);
+  const sys = v.blood_pressure_systolic;
+  const dia = v.blood_pressure_diastolic;
+  if (sys != null && dia != null) parts.push(`BP ${sys}/${dia}`);
+  const o2 = v.spo2 ?? v.oxygen_saturation;
+  if (o2 != null) parts.push(`SpO₂ ${o2}%`);
+  if (v.temperature != null) parts.push(`${v.temperature}°C`);
+  return parts.length > 0 ? parts.join(" · ") : "Recorded";
 }
 
 export default function PatientDashboard() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserInfo | null>(null);
   const [specialtyModalOpen, setSpecialtyModalOpen] = useState(false);
-  const [journeyStep, setJourneyStep] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [specialtyKey, setSpecialtyKey] = useState<string | null>(null);
+
+  const [sessions, setSessions] = useState<SymptomSession[]>([]);
+  const [reports, setReports] = useState<ReportRow[]>([]);
+  const [medications, setMedications] = useState<MedicationRow[]>([]);
+  const [vitalsLatest, setVitalsLatest] = useState<VitalsReading | null>(null);
+  const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
 
   useEffect(() => {
     const stored = localStorage.getItem("user");
     if (stored) {
       try {
-        setUser(JSON.parse(stored) as User);
+        setUser(JSON.parse(stored) as UserInfo);
       } catch {
         setUser(null);
       }
     }
+    setSpecialtyKey(
+      typeof window !== "undefined" ? localStorage.getItem("medassist_specialty") : null
+    );
   }, []);
 
-  const patientId = getPatientId(user);
+  const patientId = user?.id ?? user?.patient_id ?? null;
 
-  useEffect(() => {
-    setJourneyStep(readStoredJourneyStep());
-  }, []);
-
-  const syncJourneyFromSessions = useCallback((sessions: SymptomSessionRow[]) => {
-    const active = sessions.filter((s) => s.status === "in_progress");
-    let maxInf = 0;
-    for (const s of active) {
-      maxInf = Math.max(maxInf, sessionStageIndex(s));
+  const loadDashboard = useCallback(async () => {
+    if (!patientId) {
+      setLoading(false);
+      return;
     }
-    const stored = readStoredJourneyStep();
-    const merged = Math.max(stored, maxInf, localStorage.getItem(JOURNEY_STORAGE_SPECIALTY) ? 1 : 0);
-    setJourneyStep(merged);
-  }, []);
+    setLoading(true);
+    const spec =
+      typeof window !== "undefined" ? localStorage.getItem("medassist_specialty") : null;
+    setSpecialtyKey(spec);
 
-  const {
-    data: symptomSessions = [],
-    isLoading: loadingSessions,
-  } = useQuery({
-    queryKey: ["patient-dashboard-symptoms", patientId],
-    queryFn: async (): Promise<SymptomSessionRow[]> => {
-      const res = await apiClient.get(`/symptoms/history/${patientId}`);
-      const raw = res.data;
-      return Array.isArray(raw) ? raw : [];
-    },
-    enabled: !!patientId,
-  });
+    const results = await Promise.allSettled([
+      apiClient.get(`/symptoms/history/${patientId}`),
+      apiClient.get(`/reports/${patientId}`, { params: { limit: 8 } }),
+      apiClient.get(`/medications/${patientId}`),
+      apiClient.get(`/vitals/${patientId}`, { params: { limit: 1 } }),
+      apiClient.get("/appointments", { params: { limit: 30 } }),
+    ]);
+
+    const normArray = (data: unknown): unknown[] => {
+      if (Array.isArray(data)) return data;
+      if (data && typeof data === "object" && "sessions" in (data as object)) {
+        const s = (data as { sessions?: unknown }).sessions;
+        return Array.isArray(s) ? s : [];
+      }
+      if (data && typeof data === "object" && "appointments" in (data as object)) {
+        const a = (data as { appointments?: unknown }).appointments;
+        return Array.isArray(a) ? a : [];
+      }
+      return [];
+    };
+
+    if (results[0].status === "fulfilled") {
+      const d = results[0].value.data;
+      setSessions(normArray(d) as SymptomSession[]);
+    } else {
+      setSessions([]);
+    }
+
+    if (results[1].status === "fulfilled") {
+      const d = results[1].value.data;
+      setReports(normArray(d) as ReportRow[]);
+    } else {
+      setReports([]);
+    }
+
+    if (results[2].status === "fulfilled") {
+      const d = results[2].value.data;
+      const m = (d as { medications?: MedicationRow[] })?.medications ?? d;
+      setMedications(Array.isArray(m) ? (m as MedicationRow[]) : []);
+    } else {
+      setMedications([]);
+    }
+
+    if (results[3].status === "fulfilled") {
+      const d = results[3].value.data;
+      const list = normArray(d) as VitalsReading[];
+      setVitalsLatest(list[0] ?? null);
+    } else {
+      setVitalsLatest(null);
+    }
+
+    if (results[4].status === "fulfilled") {
+      const d = results[4].value.data;
+      setAppointments(normArray(d) as AppointmentRow[]);
+    } else {
+      setAppointments([]);
+    }
+
+    setLoading(false);
+  }, [patientId]);
 
   useEffect(() => {
-    if (symptomSessions.length) syncJourneyFromSessions(symptomSessions);
-  }, [symptomSessions, syncJourneyFromSessions]);
+    loadDashboard();
+  }, [loadDashboard]);
 
-  const activeConsultations = useMemo(
-    () => symptomSessions.filter((s) => s.status === "in_progress"),
-    [symptomSessions]
+  const journey = useMemo(
+    () => computeJourney(specialtyKey, sessions, reports),
+    [specialtyKey, sessions, reports]
   );
 
-  const {
-    data: medications = [],
-    isLoading: loadingMeds,
-  } = useQuery({
-    queryKey: ["patient-dashboard-meds", patientId],
-    queryFn: async (): Promise<MedicationRow[]> => {
-      const res = await apiClient.get(`/medications/${patientId}`);
-      const data = res.data?.medications ?? res.data;
-      return Array.isArray(data) ? data : [];
-    },
-    enabled: !!patientId,
-  });
-
-  const { data: appointments = [], isLoading: loadingAppts } = useQuery({
-    queryKey: ["patient-dashboard-appointments"],
-    queryFn: async (): Promise<AppointmentRow[]> => {
-      const res = await apiClient.get("/appointments");
-      const data = res.data?.appointments ?? res.data;
-      return Array.isArray(data) ? data : [];
-    },
-  });
-
-  const { data: vitalsList = [], isLoading: loadingVitals } = useQuery({
-    queryKey: ["patient-dashboard-vitals", patientId],
-    queryFn: async (): Promise<VitalsRow[]> => {
-      const res = await apiClient.get(`/vitals/${patientId}`);
-      const data = res.data?.vitals ?? res.data?.readings ?? res.data;
-      return Array.isArray(data) ? data : [];
-    },
-    enabled: !!patientId,
-  });
-
-  const { data: reports = [], isLoading: loadingReports } = useQuery({
-    queryKey: ["patient-dashboard-reports", patientId],
-    queryFn: async (): Promise<ReportRow[]> => {
-      const res = await apiClient.get(`/reports/${patientId}`);
-      const data = res.data?.reports ?? res.data;
-      return Array.isArray(data) ? data : [];
-    },
-    enabled: !!patientId,
-  });
-
-  const loadingMain =
-    !!patientId &&
-    (loadingSessions || loadingMeds || loadingAppts || loadingVitals || loadingReports);
+  const activeSessions = useMemo(
+    () => sessions.filter((s) => s.status === "in_progress"),
+    [sessions]
+  );
 
   const nextAppointment = useMemo(() => {
-    const now = new Date();
-    const upcoming = appointments.filter(
-      (a) =>
-        new Date(a.scheduled_at) >= now &&
-        !["completed", "cancelled", "no_show"].includes(a.status)
-    );
-    upcoming.sort(
-      (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
-    );
+    const now = Date.now();
+    const upcoming = appointments
+      .filter(
+        (a) =>
+          a.status !== "cancelled" &&
+          a.status !== "completed" &&
+          new Date(a.scheduled_at).getTime() > now
+      )
+      .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
     return upcoming[0] ?? null;
   }, [appointments]);
-
-  const latestVitals = vitalsList[0] ?? null;
 
   const activeMeds = useMemo(
     () => medications.filter((m) => m.status === "active"),
     [medications]
   );
-
-  const medsDueTodayCount = useMemo(() => {
-    return activeMeds.filter((m) => {
-      const f = (m.frequency ?? "").toLowerCase();
-      return (
-        f.includes("daily") ||
-        f.includes("once a day") ||
-        f.includes("twice") ||
-        f.includes("every day") ||
-        f.includes("qd")
-      );
-    }).length;
-  }, [activeMeds]);
-
-  const recentSymptomResults = useMemo(() => {
-    return symptomSessions
-      .filter(
-        (s) =>
-          s.status === "completed" &&
-          s.ai_analysis != null &&
-          Object.keys(s.ai_analysis).length > 0
-      )
-      .slice(0, 3);
-  }, [symptomSessions]);
+  const dueTodayCount = useMemo(() => countMedsDueToday(medications), [medications]);
 
   const recentReports = useMemo(() => {
     return [...reports]
-      .sort(
-        (a, b) =>
-          new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
-      )
-      .slice(0, 2);
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 3);
   }, [reports]);
 
-  const handleSelectSpecialty = (value: string) => {
-    localStorage.setItem(JOURNEY_STORAGE_SPECIALTY, value);
-    localStorage.setItem(JOURNEY_STORAGE_STEP, "1");
-    setJourneyStep(1);
-    setSpecialtyModalOpen(false);
-    const q = new URLSearchParams({ specialty: value });
-    router.push(`/patient/symptoms?${q.toString()}`);
-  };
+  const recentMeds = useMemo(() => activeMeds.slice(0, 4), [activeMeds]);
 
-  const currentStepIndex = Math.min(Math.max(journeyStep, 0), 5);
+  const handleSpecialtySelect = (id: string) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("medassist_specialty", id);
+      localStorage.setItem("medassist_journey_step", "2");
+    }
+    setSpecialtyKey(id);
+    setSpecialtyModalOpen(false);
+    router.push(`/patient/symptoms?specialty=${encodeURIComponent(id)}`);
+  };
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">
             Welcome{user ? `, ${user.first_name}` : ""}
@@ -309,259 +334,311 @@ export default function PatientDashboard() {
         <button
           type="button"
           onClick={() => setSpecialtyModalOpen(true)}
-          className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 sm:w-auto"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 sm:w-auto"
         >
-          <Stethoscope className="h-5 w-5" aria-hidden />
+          <Stethoscope className="h-5 w-5 shrink-0" aria-hidden />
           Start New Consultation
-          <ChevronRight className="h-4 w-4 opacity-80" aria-hidden />
+          <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
         </button>
       </div>
 
-      {/* Patient Journey Tracker - Enhanced */}
-      <JourneyTracker currentStep={currentStepIndex} loading={loadingMain} />
-
-      {/* Quick stats */}
-      <section aria-label="Quick stats">
-        <h2 className="sr-only">Quick stats</h2>
-        {loadingMain ? (
-          <div className="grid gap-3 sm:grid-cols-3">
-            <StatSkeleton />
-            <StatSkeleton />
-            <StatSkeleton />
+      {/* Patient Journey Tracker */}
+      <section
+        className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6"
+        aria-label="Patient journey progress"
+      >
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-foreground sm:text-base">
+            Patient Journey Tracker
+          </h2>
+          {journey.allDone && (
+            <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">
+              <Check className="h-4 w-4" aria-hidden />
+              Complete
+            </span>
+          )}
+        </div>
+        {loading ? (
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="min-w-[100px] flex-1 animate-pulse">
+                <div className="mx-auto h-8 w-8 rounded-full bg-muted" />
+                <div className="mt-2 h-3 w-full rounded bg-muted" />
+              </div>
+            ))}
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="flex items-start gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
-                <Calendar className="h-5 w-5" aria-hidden />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-muted-foreground">Next appointment</p>
-                {nextAppointment ? (
-                  <>
-                    <p className="mt-0.5 truncate text-sm font-semibold text-foreground">
-                      {new Date(nextAppointment.scheduled_at).toLocaleString(undefined, {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </p>
-                    <Link
-                      href="/patient/appointments"
-                      className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                    >
-                      View <ArrowRight className="h-3 w-3" />
-                    </Link>
-                  </>
-                ) : (
-                  <p className="mt-0.5 text-sm text-muted-foreground">None scheduled</p>
-                )}
-              </div>
-            </div>
+          <div className="overflow-x-auto pb-2">
+            <div className="flex min-w-[600px] items-start sm:min-w-0">
+              {JOURNEY_LABELS.map((label, index) => {
+                const done = journey.completed[index];
+                const isCurrent = !journey.allDone && index === journey.currentIndex;
+                const future = !done && !isCurrent;
 
-            <div className="flex items-start gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
-                <Pill className="h-5 w-5" aria-hidden />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-muted-foreground">Medications due today</p>
-                <p className="mt-0.5 text-lg font-bold tabular-nums text-foreground">
-                  {medsDueTodayCount > 0 ? medsDueTodayCount : activeMeds.length}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {activeMeds.length} active total
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
-                <Activity className="h-5 w-5" aria-hidden />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-muted-foreground">Latest vitals</p>
-                {latestVitals ? (
-                  <>
-                    <p className="mt-0.5 text-sm font-semibold text-foreground">
-                      {[
-                        latestVitals.heart_rate != null
-                          ? `HR ${latestVitals.heart_rate}`
-                          : null,
-                        latestVitals.blood_pressure_systolic != null
-                          ? `BP ${latestVitals.blood_pressure_systolic}/${latestVitals.blood_pressure_diastolic ?? "—"}`
-                          : null,
-                        latestVitals.oxygen_saturation != null || latestVitals.spo2 != null
-                          ? `SpO₂ ${latestVitals.oxygen_saturation ?? latestVitals.spo2}%`
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ") || "Recorded"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {latestVitals.recorded_at
-                        ? new Date(latestVitals.recorded_at).toLocaleString()
-                        : ""}
-                    </p>
-                  </>
-                ) : (
-                  <p className="mt-0.5 text-sm text-muted-foreground">No readings yet</p>
-                )}
-                <Link
-                  href="/patient/vitals"
-                  className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                >
-                  Log vitals <ArrowRight className="h-3 w-3" />
-                </Link>
-              </div>
+                return (
+                  <Fragment key={label}>
+                    {index > 0 && (
+                      <div
+                        className={`mt-4 h-0.5 min-w-[4px] flex-1 rounded ${
+                          journey.completed[index - 1] ? "bg-emerald-500" : "bg-muted"
+                        }`}
+                        aria-hidden
+                      />
+                    )}
+                    <div className="flex w-[72px] shrink-0 flex-col items-center text-center sm:w-24">
+                      <div
+                        className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-semibold transition-colors ${
+                          done
+                            ? "border-emerald-500 bg-emerald-500 text-white"
+                            : isCurrent
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-muted bg-muted/60 text-muted-foreground"
+                        }`}
+                        aria-current={isCurrent ? "step" : undefined}
+                      >
+                        {done ? (
+                          <Check className="h-4 w-4" strokeWidth={3} aria-hidden />
+                        ) : isCurrent ? (
+                          <Circle className="h-3 w-3 fill-primary text-primary" aria-hidden />
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">{index + 1}</span>
+                        )}
+                      </div>
+                      <p
+                        className={`mt-2 text-[10px] leading-tight sm:text-xs ${
+                          future ? "text-muted-foreground" : "text-foreground"
+                        } ${isCurrent ? "font-semibold text-primary" : ""}`}
+                      >
+                        {label}
+                      </p>
+                    </div>
+                  </Fragment>
+                );
+              })}
             </div>
           </div>
         )}
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Active Consultations */}
-        <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <div className="mb-4 flex items-center gap-2">
-            <ClipboardList className="h-5 w-5 text-primary" aria-hidden />
-            <h2 className="text-lg font-semibold text-foreground">Active Consultations</h2>
+      {/* Quick stats */}
+      <section aria-label="Quick stats">
+        {loading ? (
+          <div className="grid gap-4 sm:grid-cols-3">
+            {[...Array(3)].map((_, i) => (
+              <div
+                key={i}
+                className="rounded-lg border border-border bg-card p-4 shadow-sm"
+              >
+                <div className="animate-pulse space-y-2">
+                  <div className="h-4 w-1/3 rounded bg-muted" />
+                  <div className="h-6 w-2/3 rounded bg-muted" />
+                  <div className="h-3 w-full rounded bg-muted" />
+                </div>
+              </div>
+            ))}
           </div>
-          {loadingSessions ? (
-            <div className="space-y-3">
-              <div className="h-16 animate-pulse rounded-lg bg-muted" />
-              <div className="h-16 animate-pulse rounded-lg bg-muted" />
-            </div>
-          ) : activeConsultations.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No consultations in progress. Start a new consultation to begin your journey.
-            </p>
-          ) : (
-            <ul className="space-y-3">
-              {activeConsultations.map((s) => (
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Link
+              href="/patient/telemedicine"
+              className="rounded-lg border border-border bg-card p-4 shadow-sm transition-colors hover:bg-accent"
+            >
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Calendar className="h-4 w-4 shrink-0" aria-hidden />
+                <span className="text-xs font-medium uppercase tracking-wide">
+                  Next appointment
+                </span>
+              </div>
+              {nextAppointment ? (
+                <>
+                  <p className="mt-2 text-lg font-semibold text-foreground">
+                    {new Date(nextAppointment.scheduled_at).toLocaleString(undefined, {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                    {nextAppointment.doctor_name ?? "Your care team"} ·{" "}
+                    {nextAppointment.appointment_type ?? "Visit"}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">No upcoming visits scheduled</p>
+              )}
+            </Link>
+
+            <Link
+              href="/patient/medications"
+              className="rounded-lg border border-border bg-card p-4 shadow-sm transition-colors hover:bg-accent"
+            >
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Pill className="h-4 w-4 shrink-0" aria-hidden />
+                <span className="text-xs font-medium uppercase tracking-wide">
+                  Medications today
+                </span>
+              </div>
+              <p className="mt-2 text-lg font-semibold text-foreground">
+                {dueTodayCount > 0 ? `${dueTodayCount} due` : activeMeds.length > 0 ? "Review" : "—"}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {activeMeds.length} active · open schedule for doses
+              </p>
+            </Link>
+
+            <Link
+              href="/patient/vitals"
+              className="rounded-lg border border-border bg-card p-4 shadow-sm transition-colors hover:bg-accent"
+            >
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Activity className="h-4 w-4 shrink-0" aria-hidden />
+                <span className="text-xs font-medium uppercase tracking-wide">
+                  Latest vitals
+                </span>
+              </div>
+              <p className="mt-2 text-sm font-semibold leading-snug text-foreground">
+                {formatVitalsSummary(vitalsLatest)}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {vitalsLatest
+                  ? new Date(vitalsLatest.recorded_at).toLocaleString()
+                  : "Log a reading to track trends"}
+              </p>
+            </Link>
+          </div>
+        )}
+      </section>
+
+      {/* Active consultations */}
+      <section aria-label="Active consultations">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-foreground">Active Consultations</h2>
+        </div>
+        {loading ? (
+          <LoadingSkeleton rows={2} variant="card" />
+        ) : activeSessions.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
+            No symptom sessions in progress. Start a new consultation to begin.
+          </div>
+        ) : (
+          <ul className="space-y-3">
+            {activeSessions.map((s) => {
+              const title = s.chief_complaint ?? "Symptom consultation";
+              return (
                 <li
                   key={s.id}
-                  className="flex flex-col gap-2 rounded-lg border border-border p-4 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <div className="min-w-0">
-                    <p className="font-medium text-foreground">
-                      {s.chief_complaint?.trim() || "Symptom consultation"}
-                    </p>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-foreground line-clamp-2">{title}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       Stage:{" "}
                       <span className="font-medium text-foreground">{sessionStageLabel(s)}</span>
+                      {" · "}
+                      Started {new Date(s.created_at).toLocaleDateString()}
                     </p>
                   </div>
                   <Link
                     href={`/patient/symptoms?resume=${encodeURIComponent(s.id)}`}
-                    className="inline-flex shrink-0 items-center justify-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                    className="inline-flex shrink-0 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                   >
                     Continue
-                    <ArrowRight className="h-4 w-4" aria-hidden />
                   </Link>
                 </li>
-              ))}
-            </ul>
-          )}
-        </section>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
-        {/* Recent Results */}
-        <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <div className="mb-4 flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" aria-hidden />
-            <h2 className="text-lg font-semibold text-foreground">Recent Results</h2>
+      {/* Recent results */}
+      <section aria-label="Recent results">
+        <h2 className="mb-3 text-lg font-semibold text-foreground">Recent Results</h2>
+        {loading ? (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <LoadingSkeleton rows={2} variant="card" />
+            <LoadingSkeleton rows={2} variant="card" />
           </div>
-          {loadingMain ? (
-            <div className="space-y-3">
-              <div className="h-14 animate-pulse rounded-lg bg-muted" />
-              <div className="h-14 animate-pulse rounded-lg bg-muted" />
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  AI symptom analysis
-                </p>
-                {recentSymptomResults.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No completed analyses yet.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {recentSymptomResults.map((s) => (
-                      <li
-                        key={s.id}
-                        className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm"
-                      >
-                        <p className="font-medium text-foreground line-clamp-2">
-                          {s.chief_complaint ?? "Consultation"}
-                        </p>
-                        {s.recommended_action && (
-                          <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                            {s.recommended_action}
-                          </p>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+              <div className="mb-3 flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-amber-500" aria-hidden />
+                <h3 className="text-sm font-semibold text-foreground">Latest AI analysis</h3>
               </div>
-              <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Medications
+              {recentReports.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No reports yet.{" "}
+                  <Link href="/patient/reports" className="font-medium text-primary underline">
+                    Upload a report
+                  </Link>{" "}
+                  for AI interpretation.
                 </p>
-                {activeMeds.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No active medications on file.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {activeMeds.slice(0, 4).map((m) => (
-                      <li
-                        key={m.id}
-                        className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
+              ) : (
+                <ul className="space-y-3">
+                  {recentReports.map((r) => (
+                    <li key={r.id} className="border-b border-border pb-3 last:border-0 last:pb-0">
+                      <Link
+                        href="/patient/reports"
+                        className="group block font-medium text-foreground hover:text-primary"
                       >
-                        <span className="font-medium text-foreground">
-                          {m.drug_name ?? m.name ?? "Medication"}
+                        <span className="line-clamp-1">{r.title}</span>
+                        <span className="ml-2 text-xs font-normal text-muted-foreground">
+                          {r.report_type}
                         </span>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {m.dosage} · {m.frequency}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              {recentReports.length > 0 && (
-                <div>
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Reports
-                  </p>
-                  <ul className="space-y-2">
-                    {recentReports.map((r) => (
-                      <li key={r.id}>
-                        <Link
-                          href="/patient/reports"
-                          className="block rounded-md border border-border px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                        >
-                          <span className="font-medium text-foreground">{r.title}</span>
-                          {r.ai_summary && (
-                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                              {r.ai_summary}
-                            </p>
-                          )}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                      </Link>
+                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                        {r.ai_summary ?? "Analysis pending or in progress."}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
-          )}
-        </section>
-      </div>
 
-      {/* Quick Actions — existing shortcuts retained */}
+            <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+              <div className="mb-3 flex items-center gap-2">
+                <Pill className="h-4 w-4 text-primary" aria-hidden />
+                <h3 className="text-sm font-semibold text-foreground">Medications</h3>
+              </div>
+              {recentMeds.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No active medications on file.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {recentMeds.map((m) => (
+                    <li
+                      key={m.id}
+                      className="flex items-start justify-between gap-2 text-sm"
+                    >
+                      <span className="font-medium text-foreground">
+                        {m.drug_name ?? m.name ?? "Medication"}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {m.dosage} · {m.frequency}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Link
+                href="/patient/medications"
+                className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                View all medications
+                <ArrowRight className="h-3 w-3" aria-hidden />
+              </Link>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Quick actions (existing pattern) */}
       <div>
         <h2 className="mb-4 text-lg font-semibold text-foreground">Quick Actions</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <a
+          <Link
             href="/patient/symptoms"
             className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 shadow-sm transition-colors hover:bg-accent"
           >
@@ -572,8 +649,8 @@ export default function PatientDashboard() {
               <p className="text-sm font-medium text-foreground">Check Symptoms</p>
               <p className="text-xs text-muted-foreground">AI-powered analysis</p>
             </div>
-          </a>
-          <a
+          </Link>
+          <Link
             href="/patient/vitals"
             className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 shadow-sm transition-colors hover:bg-accent"
           >
@@ -584,8 +661,8 @@ export default function PatientDashboard() {
               <p className="text-sm font-medium text-foreground">Log Vitals</p>
               <p className="text-xs text-muted-foreground">Record your readings</p>
             </div>
-          </a>
-          <a
+          </Link>
+          <Link
             href="/patient/reports"
             className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 shadow-sm transition-colors hover:bg-accent"
           >
@@ -596,8 +673,8 @@ export default function PatientDashboard() {
               <p className="text-sm font-medium text-foreground">View Reports</p>
               <p className="text-xs text-muted-foreground">Medical reports & labs</p>
             </div>
-          </a>
-          <a
+          </Link>
+          <Link
             href="/patient/chat"
             className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 shadow-sm transition-colors hover:bg-accent"
           >
@@ -608,7 +685,7 @@ export default function PatientDashboard() {
               <p className="text-sm font-medium text-foreground">AI Chat</p>
               <p className="text-xs text-muted-foreground">Ask a health question</p>
             </div>
-          </a>
+          </Link>
         </div>
       </div>
 
@@ -620,67 +697,42 @@ export default function PatientDashboard() {
         </p>
       </div>
 
+      {/* Specialty modal */}
       {specialtyModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="specialty-modal-title"
-        >
-          <div className="max-h-[85vh] w-full max-w-lg overflow-hidden rounded-xl border border-border bg-card shadow-lg">
-            <div className="border-b border-border px-5 py-4">
-              <h3 id="specialty-modal-title" className="text-lg font-semibold text-foreground">
-                Choose a specialty
-              </h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Select a focus area for your consultation. You can describe symptoms next.
-              </p>
-            </div>
-            <div className="max-h-[55vh] overflow-y-auto p-3 sm:p-4">
-              <ul className="grid gap-2 sm:grid-cols-2">
-                {MEDICAL_SPECIALTIES.map((sp) => (
-                  <li key={sp.value}>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectSpecialty(sp.value)}
-                      className="flex w-full items-center justify-between rounded-lg border border-border px-4 py-3 text-left text-sm font-medium text-foreground transition-colors hover:bg-accent"
-                    >
-                      {sp.label}
-                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="border-t border-border px-5 py-3">
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50"
+            aria-label="Close dialog"
+            onClick={() => setSpecialtyModalOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="specialty-modal-title"
+            className="relative z-10 max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-t-2xl border border-border bg-card p-4 shadow-xl sm:rounded-2xl sm:p-6"
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 id="specialty-modal-title" className="text-lg font-semibold text-foreground">
+                  Choose a specialty
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  We will open the symptom assistant with this specialty context.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setSpecialtyModalOpen(false)}
-                className="w-full rounded-md border border-input py-2 text-sm font-medium hover:bg-muted"
+                className="rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:bg-muted"
               >
-                Cancel
+                Close
               </button>
             </div>
+            <SpecialtySelector onSelect={handleSpecialtySelect} />
           </div>
         </div>
       )}
     </div>
   );
-}
-
-function JourneySkeleton() {
-  return (
-    <div className="flex animate-pulse gap-2">
-      {JOURNEY_STEPS.map((s) => (
-        <div key={s} className="flex flex-1 flex-col items-center gap-2">
-          <div className="h-8 w-8 rounded-full bg-muted" />
-          <div className="h-3 w-full max-w-[72px] rounded bg-muted" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function StatSkeleton() {
-  return <div className="h-[88px] animate-pulse rounded-lg bg-muted" />;
 }
