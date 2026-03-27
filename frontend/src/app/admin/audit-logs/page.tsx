@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import apiClient from "@/lib/api-client";
+import { Download, Search, RefreshCw, Filter, ShieldCheck, AlertTriangle, FileText, Calendar } from "lucide-react";
 
 interface AuditLog {
   id: string;
@@ -115,11 +116,11 @@ export default function AuditLogsPage() {
             HIPAA compliance audit trail - immutable record of all PHI access.
           </p>
         </div>
-        {usingSample && (
+        <div className="flex items-center gap-3">{usingSample && (
           <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
             Showing sample data
           </span>
-        )}
+        )}<button onClick={() => { const hdr = "Timestamp,User,Action,Resource,IP,Status"; const rows = filtered.map(l => [new Date(l.created_at).toISOString(), l.user_name ?? "", l.action, l.resource_type, l.ip_address ?? "", String(l.status_code ?? "")].map(f => '"' + String(f).replace(/"/g, '""')+'"').join(",")).join("\n"); const b = new Blob([hdr+"\n"+rows], {type:"text/csv"}); const u = URL.createObjectURL(b); const a = document.createElement("a"); a.href = u; a.download = "audit-logs.csv"; a.click(); URL.revokeObjectURL(u); }} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"><Download className="h-4 w-4" />Export CSV</button></div>
       </div>
 
       {/* Summary cards */}
