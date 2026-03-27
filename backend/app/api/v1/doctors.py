@@ -1,10 +1,11 @@
-"""Doctor API endpoints — profiles and listings.
+"""Doctor API endpoints — profiles, listings, and availability.
 
 Routes:
     GET    /api/v1/doctors            — List doctors
     GET    /api/v1/doctors/<id>       — Get doctor profile
     POST   /api/v1/doctors            — Create doctor profile
     PUT    /api/v1/doctors/<id>       — Update doctor profile
+    GET    /api/v1/doctors/<id>/availability — Get available time slots
 """
 
 from flask import Blueprint, jsonify, request
@@ -98,3 +99,20 @@ def update_doctor(user_id: str):
         return jsonify({"error": {"code": "NOT_FOUND", "message": str(e)}}), 404
 
     return jsonify(profile.model_dump()), 200
+
+
+@bp.route("/<user_id>/availability", methods=["GET"])
+@jwt_required()
+@require_role(["patient", "doctor", "nurse", "admin"])
+def get_availability(user_id: str):
+    """Get available time slots for a doctor for the next 7 days.
+
+    Uses the doctor's availability JSON field (weekly schedule) and subtracts
+    already-booked appointments to return actual availability.
+    """
+    try:
+        availability = doctor_service.get_availability(user_id)
+    except ValueError as e:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": str(e)}}), 404
+
+    return jsonify(availability), 200
