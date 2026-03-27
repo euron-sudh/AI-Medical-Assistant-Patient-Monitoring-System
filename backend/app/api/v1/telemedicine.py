@@ -34,6 +34,36 @@ def _check_session_access(session_id: uuid.UUID) -> tuple | None:
     return None
 
 
+@bp.route("/sessions", methods=["GET"])
+@jwt_required()
+def list_sessions():
+    """List telemedicine sessions for the current user.
+
+    Query params:
+        status: Filter by session status (waiting, in_progress, completed, failed).
+        limit: Maximum number of sessions (default 50, max 200).
+        offset: Number of sessions to skip (default 0).
+    """
+    claims = get_jwt()
+    current_user_id = uuid.UUID(get_jwt_identity())
+    role = claims.get("role", "")
+
+    status = request.args.get("status")
+    limit = request.args.get("limit", 50, type=int)
+    limit = min(max(limit, 1), 200)
+    offset = request.args.get("offset", 0, type=int)
+    offset = max(offset, 0)
+
+    sessions = telemedicine_service.list_sessions(
+        user_id=current_user_id,
+        role=role,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+    return jsonify([s.model_dump(mode="json") for s in sessions]), 200
+
+
 @bp.route("/session", methods=["POST"])
 @jwt_required()
 def create_session():
@@ -160,3 +190,66 @@ def get_notes(session_id: str):
 
     notes = telemedicine_service.get_notes(session_uuid)
     return jsonify({"notes": notes, "message": "No clinical notes available yet" if notes is None else None}), 200
+
+
+@bp.route("/session/<session_id>/transcript", methods=["POST"])
+@jwt_required()
+def save_transcript(session_id: str):
+    """Save or update the transcript for a telemedicine session."""
+    try:
+        session_uuid = uuid.UUID(session_id)
+    except ValueError:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Invalid session ID"}}), 400
+
+    access_error = _check_session_access(session_uuid)
+    if access_error:
+        return access_error
+
+    body = request.get_json()
+    if not body or "transcript" not in body:
+        return jsonify({
+            "error": {"code": "BAD_REQUEST", "message": "Request body must include 'transcript' field"}
+        }), 400
+
+    try:
+        session = telemedicine_service.save_transcript(session_uuid, body["transcript"])
+    except ValueError as e:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": str(e)}}), 400
+
+    return jsonify(session.model_dump(mode="json")), 200
+
+
+@bp.route("/session/<session_id>/notes", methods=["POST"])
+@jwt_required()
+def save_notes(session_id: str):
+    """Save or update clinical notes for a telemedicine session."""
+    try:
+        session_uuid = uuid.UUID(session_id)
+    except ValueError:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Invalid session ID"}}), 400
+
+    access_error = _check_session_access(session_uuid)
+    if access_error:
+        return access_error
+
+    # Only doctors/admins can write clinical notes
+    claims = get_jwt()
+    role = claims.get("role", "")
+    if role not in ("doctor", "admin"):
+        return jsonify({
+            "error": {"code": "FORBIDDEN", "message": "Only doctors and admins can save clinical notes"}
+        }), 403
+
+    body = request.get_json()
+    if not body or "notes" not in body:
+        return jsonify({
+            "error": {"code": "BAD_REQUEST", "message": "Request body must include 'notes' field"}
+        }), 400
+
+    try:
+        session = telemedicine_service.save_notes(session_uuid, body["notes"])
+    except ValueError as e:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": str(e)}}), 400
+
+    return jsonify(session.model_dump(mode="json")), 200
+

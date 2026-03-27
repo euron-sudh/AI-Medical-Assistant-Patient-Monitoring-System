@@ -1,4 +1,15 @@
-"use client";
+"""Helper script to write all 6 doctor page files."""
+import os
+
+BASE = os.path.dirname(os.path.abspath(__file__))
+FRONTEND = os.path.join(BASE, "frontend", "src", "app", "doctor")
+
+files = {}
+
+# ============================================================
+# Task #50: Doctor Dashboard - Enhanced
+# ============================================================
+files["dashboard/page.tsx"] = '''"use client";
 
 import { useEffect, useState } from "react";
 import apiClient from "@/lib/api-client";
@@ -363,3 +374,13 @@ export default function DoctorDashboard() {
     </div>
   );
 }
+'''
+
+for rel_path, content in files.items():
+    full_path = os.path.join(FRONTEND, rel_path)
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    with open(full_path, 'w', newline='\n') as f:
+        f.write(content)
+    print(f"Written: {rel_path} ({len(content)} bytes)")
+
+print("Done writing dashboard")

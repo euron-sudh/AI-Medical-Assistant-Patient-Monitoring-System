@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CalendarPlus } from "lucide-react";
 import apiClient from "@/lib/api-client";
+import BookingFlow from "@/components/appointments/BookingFlow";
 
 interface Appointment {
   id: string;
@@ -43,6 +45,7 @@ export default function AppointmentsPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showBooking, setShowBooking] = useState(false);
 
   useEffect(() => {
     fetchAppointments();
@@ -102,6 +105,12 @@ export default function AppointmentsPage() {
     });
   };
 
+  const handleBooked = () => {
+    setShowBooking(false);
+    setLoading(true);
+    fetchAppointments();
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -111,10 +120,29 @@ export default function AppointmentsPage() {
             View and manage your upcoming and past appointments.
           </p>
         </div>
-        <div className="text-sm text-muted-foreground">
-          {upcoming.length} upcoming
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">
+            {upcoming.length} upcoming
+          </span>
+          {!showBooking && (
+            <button
+              type="button"
+              onClick={() => setShowBooking(true)}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+            >
+              <CalendarPlus className="h-4 w-4" />
+              Book Appointment
+            </button>
+          )}
         </div>
       </div>
+
+      {showBooking && (
+        <BookingFlow
+          onBooked={handleBooked}
+          onCancel={() => setShowBooking(false)}
+        />
+      )}
 
       {loading ? (
         <div className="rounded-lg border border-border bg-card p-12 text-center">
@@ -129,8 +157,8 @@ export default function AppointmentsPage() {
           <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-foreground">Upcoming</h2>
             <p className="mt-4 text-sm text-muted-foreground">
-              No upcoming appointments scheduled. Book an appointment with your care team
-              for in-person visits or telemedicine consultations.
+              No upcoming appointments scheduled. Use the Book Appointment button above to
+              schedule an in-person visit or telemedicine consultation.
             </p>
           </div>
           <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
@@ -142,7 +170,6 @@ export default function AppointmentsPage() {
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Upcoming */}
           <div>
             <h2 className="mb-3 text-lg font-semibold text-foreground">
               Upcoming ({upcoming.length})
@@ -166,8 +193,6 @@ export default function AppointmentsPage() {
               </div>
             )}
           </div>
-
-          {/* Past */}
           <div>
             <h2 className="mb-3 text-lg font-semibold text-foreground">
               Past ({past.length})
@@ -232,7 +257,6 @@ function AppointmentCard({
           </span>
         </div>
       </div>
-
       <div className="mt-3 space-y-1 text-sm">
         <div className="flex items-center gap-2 text-muted-foreground">
           <span className="font-medium text-foreground">
@@ -251,7 +275,6 @@ function AppointmentCard({
           <p className="text-xs text-muted-foreground mt-2 italic">{appt.notes}</p>
         )}
       </div>
-
       {appt.appointment_type === "telemedicine" &&
         ["scheduled", "confirmed"].includes(appt.status) && (
           <div className="mt-3">
