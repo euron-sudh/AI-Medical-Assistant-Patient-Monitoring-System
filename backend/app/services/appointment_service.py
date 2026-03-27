@@ -12,8 +12,10 @@ from app.schemas.appointment_schema import (
     AppointmentResponse,
     CancelAppointmentRequest,
     CreateAppointmentRequest,
+    RecurringAppointmentRequest,
     UpdateAppointmentRequest,
 )
+from app.schemas.notification_schema import CreateNotificationRequest
 
 logger = structlog.get_logger(__name__)
 
@@ -313,6 +315,75 @@ class AppointmentService:
             current = slot_end
 
         return available_slots
+
+    def check_doctor_availability(self, doctor_id, scheduled_at, duration_minutes):
+        """Check if a doctor is available at the requested time."""
+        conflict = self._check_scheduling_conflict(doctor_id=doctor_id, scheduled_at=scheduled_at, duration_minutes=duration_minutes)
+        if conflict:
+            appointment_end = scheduled_at + timedelta(minutes=duration_minutes)
+            stmt = select(Appointment).where(Appointment.doctor_id == doctor_id, Appointment.status.not_in(["cancelled", "no_show"]), Appointment.scheduled_at < appointment_end)
+            appointments = db.session.execute(stmt).scalars().all()
+            conflicts = []
+            for appt in appointments:
+                appt_end = appt.scheduled_at + timedelta(minutes=appt.duration_minutes)
+                if appt.scheduled_at < appointment_end and appt_end > scheduled_at:
+                    conflicts.append({"appointment_id": str(appt.id), "scheduled_at": appt.scheduled_at.isoformat(), "ends_at": appt_end.isoformat()})
+            return {"available": False, "conflicts": conflicts}
+        return {"available": True, "conflicts": []}
+
+    def confirm_appointment(self, appointment_id, confirmed_by, send_notification=True):
+        """Confirm a scheduled appointment and optionally send notification."""
+        stmt = select(Appointment).where(Appointment.id == appointment_id)
+        appointment = db.session.execute(stmt).scalar_one_or_none()
+        if not appointment:
+            raise ValueError("Appointment not found")
+        if appointment.status != "scheduled":
+            raise ValueError(f"Cannot confirm appointment with status '{appointment.status}'")
+        appointment.status = "confirmed"
+        db.session.commit()
+        logger.info("appointment_confirmed", appointment_id=str(appointment_id), confirmed_by=str(confirmed_by))
+        if send_notification:
+            self._send_appointment_notification(appointment, title="Appointment Confirmed", message=f"Your appointment on {appointment.scheduled_at.strftime('%Y-%m-%d %H:%M')} has been confirmed.", notification_type="appointment_confirmed")
+        return self._to_response(appointment)
+
+    def cancel_appointment_with_notification(self, appointment_id, cancelled_by, data):
+        """Cancel an appointment and send notification to relevant parties."""
+        response = self.cancel_appointment(appointment_id, cancelled_by, data)
+        stmt = select(Appointment).where(Appointment.id == appointment_id)
+        appointment = db.session.execute(stmt).scalar_one_or_none()
+        if appointment:
+            self._send_appointment_notification(appointment, title="Appointment Cancelled", message=f"Your appointment on {appointment.scheduled_at.strftime('%Y-%m-%d %H:%M')} has been cancelled. Reason: {data.reason}", notification_type="appointment_cancelled")
+        return response
+
+    def create_recurring_appointments(self, data: RecurringAppointmentRequest, created_by):
+        """Create a series of recurring appointments."""
+        patient_id = uuid.UUID(data.patient_id)
+        doctor_id = uuid.UUID(data.doctor_id)
+        pattern_deltas = {"daily": timedelta(days=1), "weekly": timedelta(weeks=1), "biweekly": timedelta(weeks=2), "monthly": timedelta(days=30)}
+        delta = pattern_deltas[data.recurrence_pattern]
+        scheduled_times = []
+        current_time = data.first_scheduled_at
+        for i in range(data.occurrences):
+            if self._check_scheduling_conflict(doctor_id=doctor_id, scheduled_at=current_time, duration_minutes=data.duration_minutes):
+                raise ValueError(f"Doctor has a scheduling conflict for occurrence {i + 1} at {current_time.isoformat()}")
+            scheduled_times.append(current_time)
+            current_time = current_time + delta
+        created = []
+        for scheduled_at in scheduled_times:
+            appointment = Appointment(patient_id=patient_id, doctor_id=doctor_id, appointment_type=data.appointment_type, scheduled_at=scheduled_at, duration_minutes=data.duration_minutes, reason=data.reason, notes=data.notes, created_by=created_by)
+            db.session.add(appointment)
+            created.append(appointment)
+        db.session.commit()
+        logger.info("recurring_appointments_created", count=len(created), patient_id=str(patient_id), doctor_id=str(doctor_id), pattern=data.recurrence_pattern)
+        return [self._to_response(a) for a in created]
+
+    def _send_appointment_notification(self, appointment, title, message, notification_type):
+        """Send a notification related to an appointment."""
+        try:
+            from app.services.notification_service import notification_service
+            notification_service.create_notification(CreateNotificationRequest(user_id=str(appointment.patient_id), type=notification_type, title=title, message=message, data={"appointment_id": str(appointment.id)}, channel="in_app"))
+        except Exception as e:
+            logger.warning("appointment_notification_failed", appointment_id=str(appointment.id), error=str(e))
 
     def check_appointment_access(
         self, appointment_id: uuid.UUID, user_id: uuid.UUID, role: str
