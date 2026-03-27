@@ -17,7 +17,7 @@ from app.models.medication import Medication
 from app.models.symptom_session import SymptomSession
 from app.models.alert import MonitoringAlert
 from app.models.audit_log import AuditLog
-from app.models.report import Report
+from app.models.report import MedicalReport as Report
 from app.models.telemedicine import TelemedicineSession
 
 
