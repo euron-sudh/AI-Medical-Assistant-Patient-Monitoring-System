@@ -1,14 +1,18 @@
 """Medication API endpoints — CRUD, interactions, schedule, adherence.
 
 Routes:
-    GET    /api/v1/medications/<patient_id>               — List medications
-    POST   /api/v1/medications/<patient_id>               — Create medication
-    PUT    /api/v1/medications/detail/<medication_id>      — Update medication
-    DELETE /api/v1/medications/detail/<medication_id>      — Discontinue (soft-delete)
-    POST   /api/v1/medications/interaction-check           — Check drug interactions
-    GET    /api/v1/medications/<patient_id>/schedule       — Get medication schedule
-    POST   /api/v1/medications/detail/<med_id>/adherence   — Log adherence
-    GET    /api/v1/medications/search                      — Search drug database
+    GET    /api/v1/medications/<patient_id>                       — List medications
+    POST   /api/v1/medications/<patient_id>                       — Create medication
+    PUT    /api/v1/medications/detail/<medication_id>              — Update medication
+    DELETE /api/v1/medications/detail/<medication_id>              — Discontinue (soft-delete)
+    POST   /api/v1/medications/interaction-check                   — Check drug interactions
+    POST   /api/v1/medications/<patient_id>/interaction-check      — Patient-scoped interaction check
+    GET    /api/v1/medications/<patient_id>/schedule               — Get medication schedule
+    POST   /api/v1/medications/<patient_id>/adherence              — Record medication taken
+    POST   /api/v1/medications/detail/<med_id>/adherence           — Log adherence (legacy)
+    GET    /api/v1/medications/search                              — Search drug database
+
+Task #31 — Vikash Kumar (patient-scoped interaction check, daily schedule, adherence recording)
 """
 
 from flask import Blueprint, jsonify, request
@@ -17,7 +21,12 @@ from pydantic import ValidationError
 
 from app.middleware.auth_middleware import require_role
 from app.schemas.medication_schema import (
-    AdherenceLogRequest, CreateMedicationRequest, InteractionCheckRequest, UpdateMedicationRequest,
+    AdherenceLogRequest,
+    AdherenceRecordRequest,
+    CreateMedicationRequest,
+    InteractionCheckRequest,
+    PatientInteractionCheckRequest,
+    UpdateMedicationRequest,
 )
 from app.services.medication_service import medication_service
 
@@ -98,16 +107,111 @@ def interaction_check():
     return jsonify(result.model_dump()), 200
 
 
+# ---------------------------------------------------------------------------
+# Task #31 — Patient-scoped interaction check
+# ---------------------------------------------------------------------------
+
+@bp.route("/<patient_id>/interaction-check", methods=["POST"])
+@jwt_required()
+@require_role(["patient", "doctor", "nurse", "admin"])
+def patient_interaction_check(patient_id: str):
+    """Check drug interactions for a patient, including their active medications.
+
+    Accepts a list of drug names and checks for known interactions among those
+    drugs and the patient's currently active prescriptions.
+
+    Args:
+        patient_id: UUID of the patient.
+
+    Request body:
+        {"medication_names": ["warfarin", "aspirin"]}
+
+    Returns:
+        200 with interaction check results.
+    """
+    denied = _check_med_access(patient_id)
+    if denied:
+        return denied
+
+    try:
+        data = PatientInteractionCheckRequest.model_validate(request.get_json())
+    except ValidationError as e:
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "details": e.errors()}}), 400
+
+    result = medication_service.check_interactions(data.medication_names, patient_id)
+    return jsonify(result.model_dump()), 200
+
+
+# ---------------------------------------------------------------------------
+# Task #31 — Enhanced daily schedule
+# ---------------------------------------------------------------------------
+
 @bp.route("/<patient_id>/schedule", methods=["GET"])
 @jwt_required()
 @require_role(["patient", "doctor", "nurse", "admin"])
 def get_schedule(patient_id: str):
+    """Get a structured daily medication schedule for a patient.
+
+    Maps each active prescription's frequency to time-of-day slots
+    (morning, afternoon, evening, night) and returns a sorted schedule.
+
+    Args:
+        patient_id: UUID of the patient.
+
+    Returns:
+        200 with daily schedule including time slots and total doses.
+    """
     denied = _check_med_access(patient_id)
     if denied:
         return denied
-    schedule = medication_service.get_schedule(patient_id)
+    schedule = medication_service.get_daily_schedule(patient_id)
     return jsonify(schedule.model_dump()), 200
 
+
+# ---------------------------------------------------------------------------
+# Task #31 — Record adherence (patient-scoped)
+# ---------------------------------------------------------------------------
+
+@bp.route("/<patient_id>/adherence", methods=["POST"])
+@jwt_required()
+@require_role(["patient", "doctor", "nurse", "admin"])
+def record_adherence(patient_id: str):
+    """Record that a patient has taken a specific medication.
+
+    Args:
+        patient_id: UUID of the patient.
+
+    Request body:
+        {"medication_id": "<uuid>", "taken_at": "2026-03-26T08:00:00Z", "notes": "..."}
+
+    Returns:
+        201 with adherence confirmation.
+    """
+    denied = _check_med_access(patient_id)
+    if denied:
+        return denied
+
+    try:
+        data = AdherenceRecordRequest.model_validate(request.get_json())
+    except ValidationError as e:
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "details": e.errors()}}), 400
+
+    try:
+        result = medication_service.record_adherence(
+            patient_id=patient_id,
+            medication_id=data.medication_id,
+            taken_at=data.taken_at,
+            notes=data.notes,
+        )
+    except ValueError as e:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": str(e)}}), 404
+
+    return jsonify(result.model_dump()), 201
+
+
+# ---------------------------------------------------------------------------
+# Legacy adherence endpoint
+# ---------------------------------------------------------------------------
 
 @bp.route("/detail/<medication_id>/adherence", methods=["POST"])
 @jwt_required()

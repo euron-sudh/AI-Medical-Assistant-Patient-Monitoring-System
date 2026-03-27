@@ -2,12 +2,16 @@
 
 Routes:
     GET    /api/v1/reports/<patient_id>                        — List patient reports
-    POST   /api/v1/reports/<patient_id>/upload                 — Upload a report
+    POST   /api/v1/reports/<patient_id>/upload                 — Upload a report (JSON)
+    POST   /api/v1/reports/upload                              — Upload a report (multipart file)
     GET    /api/v1/reports/<patient_id>/<report_id>            — Get report details
+    GET    /api/v1/reports/<report_id>/download                — Get presigned download URL
     POST   /api/v1/reports/<patient_id>/<report_id>/analyze    — Trigger AI analysis
     GET    /api/v1/reports/<patient_id>/<report_id>/lab-values — Get lab values
     GET    /api/v1/reports/<patient_id>/<report_id>/summary    — Get AI summary
     DELETE /api/v1/reports/<patient_id>/<report_id>            — Delete report
+
+Task #30 — Vikash Kumar (file upload + download endpoints)
 """
 
 import uuid
@@ -42,6 +46,138 @@ def _check_patient_access(patient_id: str) -> tuple | None:
 
     return None
 
+
+# ---------------------------------------------------------------------------
+# Task #30 — Direct file upload (multipart)
+# ---------------------------------------------------------------------------
+
+@bp.route("/upload", methods=["POST"])
+@jwt_required()
+def upload_report_file():
+    """Upload a medical report as a multipart file.
+
+    Accepts multipart/form-data with:
+        - file: The report file (required)
+        - patient_id: UUID of the patient (required)
+        - report_type: One of lab, imaging, pathology, etc. (required)
+        - title: Report title (required)
+
+    The file is stored in S3 via s3_client, a MedicalReport record is created,
+    and a Celery task is dispatched for async AI processing.
+
+    Returns:
+        201 with report_id and status.
+    """
+    # Validate file presence
+    if "file" not in request.files:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "No file provided"}}), 400
+
+    file = request.files["file"]
+    if file.filename == "" or file.filename is None:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Empty filename"}}), 400
+
+    # Read form fields
+    patient_id = request.form.get("patient_id")
+    report_type = request.form.get("report_type")
+    title = request.form.get("title")
+
+    if not patient_id or not report_type or not title:
+        return jsonify({
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "patient_id, report_type, and title are required form fields",
+            }
+        }), 400
+
+    # Validate patient_id
+    try:
+        patient_uuid = uuid.UUID(patient_id)
+    except ValueError:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Invalid patient ID"}}), 400
+
+    # Access check
+    access_error = _check_patient_access(patient_id)
+    if access_error:
+        return access_error
+
+    # Determine file type from extension
+    file_ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "bin"
+
+    # Upload to S3
+    from app.integrations.s3_client import s3_client
+
+    file_bytes = file.read()
+    file_url = s3_client.upload_file(file_bytes, patient_id, file_ext)
+
+    # Create report record via service
+    current_user_id = uuid.UUID(get_jwt_identity())
+    report_data = CreateReportRequest(
+        report_type=report_type,
+        title=title,
+        file_url=file_url,
+        file_type=file_ext,
+    )
+    report = report_service.create_report(patient_uuid, report_data, created_by=current_user_id)
+
+    # Dispatch async processing
+    from app.tasks.report_processing import process_medical_report
+
+    process_medical_report.delay(report.id)
+
+    return jsonify({
+        "report_id": report.id,
+        "status": report.status,
+        "file_url": report.file_url,
+        "message": "Report uploaded successfully. Processing has been queued.",
+    }), 201
+
+
+# ---------------------------------------------------------------------------
+# Task #30 — Presigned download URL
+# ---------------------------------------------------------------------------
+
+@bp.route("/<report_id>/download", methods=["GET"])
+@jwt_required()
+def download_report(report_id: str):
+    """Get a presigned URL to download a report file.
+
+    Args:
+        report_id: UUID of the report.
+
+    Returns:
+        200 with download_url (presigned, 15 min expiry).
+    """
+    try:
+        report_uuid = uuid.UUID(report_id)
+    except ValueError:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Invalid report ID"}}), 400
+
+    report = report_service.get_report(report_uuid)
+    if report is None:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": "Report not found"}}), 404
+
+    # Access check — use patient_id from the report
+    access_error = _check_patient_access(report.patient_id)
+    if access_error:
+        return access_error
+
+    if not report.file_url:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Report has no associated file"}}), 400
+
+    from app.integrations.s3_client import s3_client
+
+    download_url = s3_client.generate_presigned_url(report.file_url, expiry=900)
+
+    return jsonify({
+        "report_id": report.id,
+        "download_url": download_url,
+        "expires_in": 900,
+    }), 200
+
+
+# ---------------------------------------------------------------------------
+# Existing endpoints
+# ---------------------------------------------------------------------------
 
 @bp.route("/<patient_id>", methods=["GET"])
 @jwt_required()
