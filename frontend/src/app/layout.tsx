@@ -9,6 +9,9 @@ export const metadata: Metadata = {
   title: "MedAssist AI - Intelligent Medical Assistant",
   description:
     "AI-powered medical assistant for symptom analysis, patient monitoring, and healthcare management.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
