@@ -1,6 +1,10 @@
-"""Medication request/response schemas — Pydantic validation."""
+"""Medication request/response schemas — Pydantic validation.
 
-from datetime import date
+Task #31 — Vikash Kumar (added PatientInteractionCheckRequest, ScheduleEntry,
+DailyMedicationScheduleResponse, AdherenceRecordRequest, AdherenceRecordResponse)
+"""
+
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -71,3 +75,48 @@ class AdherenceLogRequest(BaseModel):
 class MedicationScheduleResponse(BaseModel):
     patient_id: str
     medications: list[MedicationResponse]
+
+
+# -----------------------------------------------------------------------
+# Task #31 — new schemas
+# -----------------------------------------------------------------------
+
+class PatientInteractionCheckRequest(BaseModel):
+    """Request body for patient-scoped interaction check."""
+    medication_names: list[str] = Field(min_length=2)
+
+
+class ScheduleEntry(BaseModel):
+    """A single scheduled dose in a daily medication schedule."""
+    medication_id: str
+    medication_name: str
+    dosage: str
+    frequency: str
+    route: str | None = None
+    time_slot: str  # e.g. "morning", "afternoon", "evening", "night"
+    notes: str | None = None
+
+
+class DailyMedicationScheduleResponse(BaseModel):
+    """Full daily medication schedule for a patient."""
+    patient_id: str
+    date: str
+    schedule: list[ScheduleEntry]
+    total_doses: int
+
+
+class AdherenceRecordRequest(BaseModel):
+    """Request body for recording that a medication was taken."""
+    medication_id: str
+    taken_at: datetime | None = None
+    notes: str | None = None
+
+
+class AdherenceRecordResponse(BaseModel):
+    """Response after recording medication adherence."""
+    patient_id: str
+    medication_id: str
+    medication_name: str
+    taken_at: str
+    recorded: bool = True
+    notes: str | None = None
