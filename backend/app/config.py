@@ -79,6 +79,9 @@ class BaseConfig:
     DAILY_API_KEY = os.getenv("DAILY_API_KEY", "")
     DAILY_DOMAIN = os.getenv("DAILY_DOMAIN", "")
 
+    # Google OAuth
+    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+
     # Encryption
     PHI_ENCRYPTION_KEY = os.getenv("PHI_ENCRYPTION_KEY", "")
 

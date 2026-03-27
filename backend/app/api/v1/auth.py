@@ -1,8 +1,9 @@
-"""Auth API endpoints — registration, login, token refresh, profile.
+"""Auth API endpoints — registration, login, token refresh, profile, Google OAuth.
 
 Routes:
     POST /api/v1/auth/register  — Register a new user
     POST /api/v1/auth/login     — Login and get JWT tokens
+    POST /api/v1/auth/google    — Login/register with Google OAuth
     POST /api/v1/auth/refresh   — Refresh access token
     GET  /api/v1/auth/me        — Get current user profile
     POST /api/v1/auth/change-password — Change password
@@ -66,6 +67,33 @@ def login():
         tokens = auth_service.login(data)
     except ValueError as e:
         return jsonify({"error": {"code": "UNAUTHORIZED", "message": str(e)}}), 401
+
+    return jsonify(tokens.model_dump()), 200
+
+
+@bp.route("/google", methods=["POST"])
+def google_auth():
+    """Login or register with Google OAuth.
+
+    Accepts a Google ID token from the frontend Google Sign-In,
+    verifies it, and returns JWT tokens. Creates a new user if
+    the Google account hasn't been seen before.
+    """
+    body = request.get_json() or {}
+    id_token = body.get("credential") or body.get("id_token")
+
+    if not id_token:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Google credential required"}}), 400
+
+    try:
+        google_user = auth_service.verify_google_token(id_token)
+    except ValueError as e:
+        return jsonify({"error": {"code": "UNAUTHORIZED", "message": str(e)}}), 401
+
+    try:
+        tokens = auth_service.login_or_register_google(google_user)
+    except ValueError as e:
+        return jsonify({"error": {"code": "INTERNAL_ERROR", "message": str(e)}}), 500
 
     return jsonify(tokens.model_dump()), 200
 
