@@ -203,6 +203,114 @@ class TelemedicineService:
             return None
         return session.ai_summary
 
+    def list_sessions(
+        self,
+        user_id: uuid.UUID,
+        role: str,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[TelemedicineSessionResponse]:
+        """List telemedicine sessions for a user, scoped by role.
+
+        Patients see sessions where they are the patient.
+        Doctors/nurses see sessions where they are the doctor.
+        Admins see all sessions.
+
+        Args:
+            user_id: UUID of the authenticated user.
+            role: User role.
+            status: Optional status filter.
+            limit: Maximum results to return.
+            offset: Number of results to skip.
+
+        Returns:
+            List of TelemedicineSessionResponse matching the filters.
+        """
+        stmt = select(TelemedicineSession)
+
+        if role == "patient":
+            stmt = stmt.where(TelemedicineSession.patient_id == user_id)
+        elif role in ("doctor", "nurse"):
+            stmt = stmt.where(TelemedicineSession.doctor_id == user_id)
+        # admin sees all
+
+        if status:
+            stmt = stmt.where(TelemedicineSession.status == status)
+
+        stmt = (
+            stmt.order_by(TelemedicineSession.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+
+        sessions = db.session.execute(stmt).scalars().all()
+        return [self._to_response(s) for s in sessions]
+
+    def save_transcript(
+        self, session_id: uuid.UUID, transcript: str
+    ) -> TelemedicineSessionResponse:
+        """Save or update the transcript for a session.
+
+        Args:
+            session_id: UUID of the session.
+            transcript: The transcript text to save.
+
+        Returns:
+            Updated TelemedicineSessionResponse.
+
+        Raises:
+            ValueError: If session not found.
+        """
+        stmt = select(TelemedicineSession).where(TelemedicineSession.id == session_id)
+        session = db.session.execute(stmt).scalar_one_or_none()
+
+        if not session:
+            raise ValueError("Telemedicine session not found")
+
+        session.ai_transcript = transcript
+        db.session.commit()
+
+        logger.info(
+            "telemedicine_transcript_saved",
+            session_id=str(session_id),
+            transcript_length=len(transcript),
+        )
+
+        return self._to_response(session)
+
+    def save_notes(
+        self, session_id: uuid.UUID, notes: str
+    ) -> TelemedicineSessionResponse:
+        """Save or update clinical notes for a session.
+
+        Args:
+            session_id: UUID of the session.
+            notes: The clinical notes text to save.
+
+        Returns:
+            Updated TelemedicineSessionResponse.
+
+        Raises:
+            ValueError: If session not found.
+        """
+        stmt = select(TelemedicineSession).where(TelemedicineSession.id == session_id)
+        session = db.session.execute(stmt).scalar_one_or_none()
+
+        if not session:
+            raise ValueError("Telemedicine session not found")
+
+        session.ai_summary = notes
+        db.session.commit()
+
+        logger.info(
+            "telemedicine_notes_saved",
+            session_id=str(session_id),
+            notes_length=len(notes),
+        )
+
+        return self._to_response(session)
+
     def check_session_access(
         self, session_id: uuid.UUID, user_id: uuid.UUID, role: str
     ) -> bool:

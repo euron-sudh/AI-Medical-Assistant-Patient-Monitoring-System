@@ -3,11 +3,14 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select, update
+import structlog
+from sqlalchemy import func, select, update
 
 from app.extensions import db
 from app.models.notification import Notification
 from app.schemas.notification_schema import CreateNotificationRequest, NotificationResponse
+
+logger = structlog.get_logger(__name__)
 
 
 class NotificationService:
@@ -131,14 +134,63 @@ class NotificationService:
             Number of unread notifications.
         """
         stmt = (
-            select(Notification)
+            select(func.count(Notification.id))
             .where(
                 Notification.user_id == user_id,
                 Notification.read == False,  # noqa: E712
             )
         )
-        notifications = db.session.execute(stmt).scalars().all()
-        return len(notifications)
+        count = db.session.execute(stmt).scalar()
+        return count or 0
+
+    def create_bulk_notifications(
+        self,
+        user_ids: list[str],
+        type: str,
+        title: str,
+        message: str,
+        data: dict | None = None,
+        channel: str = "in_app",
+    ) -> list[NotificationResponse]:
+        """Create notifications for multiple users at once.
+
+        Args:
+            user_ids: List of user ID strings to notify.
+            type: Notification type.
+            title: Notification title.
+            message: Notification body.
+            data: Optional JSON payload.
+            channel: Delivery channel (in_app, email, sms, push).
+
+        Returns:
+            List of NotificationResponse for all created notifications.
+        """
+        now = datetime.now(timezone.utc)
+        notifications = []
+
+        for uid in user_ids:
+            notification = Notification(
+                user_id=uuid.UUID(uid),
+                type=type,
+                title=title,
+                message=message,
+                data=data,
+                channel=channel,
+                sent_at=now if channel == "in_app" else None,
+            )
+            db.session.add(notification)
+            notifications.append(notification)
+
+        db.session.commit()
+
+        logger.info(
+            "bulk_notifications_created",
+            count=len(notifications),
+            type=type,
+            channel=channel,
+        )
+
+        return [self._to_response(n) for n in notifications]
 
     def _to_response(self, notification: Notification) -> NotificationResponse:
         """Convert a Notification model to a NotificationResponse schema."""
