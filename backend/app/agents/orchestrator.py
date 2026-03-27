@@ -17,6 +17,10 @@ from app.agents.symptom_analyst import SymptomAnalystAgent
 from app.agents.report_reader import ReportReaderAgent
 from app.agents.triage_agent import TriageAgent
 from app.agents.specialty_agent import SpecialtyAgent
+from app.agents.drug_interaction_agent import DrugInteractionAgent
+from app.agents.voice_agent import VoiceAgent
+from app.agents.monitoring_agent import MonitoringAgent
+from app.agents.followup_agent import FollowUpAgent
 from app.agents.specialty_config import match_specialty_from_symptoms, get_all_specialties
 from app.integrations.openai_client import OpenAIClient, OpenAIClientError
 
@@ -40,6 +44,10 @@ AGENT_REGISTRY: dict[str, type] = {
     "symptom_analyst": SymptomAnalystAgent,
     "report_reader": ReportReaderAgent,
     "triage": TriageAgent,
+    "drug_interaction": DrugInteractionAgent,
+    "voice": VoiceAgent,
+    "monitoring": MonitoringAgent,
+    "follow_up": FollowUpAgent,
     # Specialty agents
     "general_physician": _specialty_factory("general_physician"),
     "cardiology": _specialty_factory("cardiology"),
