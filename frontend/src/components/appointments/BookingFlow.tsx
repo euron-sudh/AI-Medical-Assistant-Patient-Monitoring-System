@@ -1,229 +1,546 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertCircle,
   Calendar,
-  Clock,
-  User,
-  ChevronRight,
-  ChevronLeft,
   Check,
-  Video,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
   MapPin,
+  Star,
   Stethoscope,
+  User,
+  Video,
+  X,
 } from "lucide-react";
 import apiClient from "@/lib/api-client";
+import SpecialtySelector from "@/components/shared/SpecialtySelector";
 
-interface Doctor {
+/** Maps SpecialtySelector ids to API specialization search terms. */
+const SPECIALTY_SEARCH: Record<string, string> = {
+  "general-physician": "General",
+  cardiology: "Cardiology",
+  orthopedics: "Orthopedics",
+  dermatology: "Dermatology",
+  gynecology: "Gynecology",
+  pediatrics: "Pediatrics",
+  neurology: "Neurology",
+  psychiatry: "Psychiatry",
+};
+
+export interface DoctorProfile {
   id: string;
-  name: string;
+  user_id: string;
   specialization: string;
-  available: boolean;
+  years_of_experience?: number | null;
+  consultation_fee?: number | null;
 }
 
-interface TimeSlot {
-  time: string;
-  label: string;
-  available: boolean;
+interface AvailabilitySlot {
+  start: string;
+  end: string;
 }
-
-type AppointmentType = "in_person" | "telemedicine";
 
 interface BookingFlowProps {
+  open: boolean;
+  onClose: () => void;
   onBooked: () => void;
-  onCancel: () => void;
 }
 
-const STEPS = ["Select Doctor", "Choose Date & Time", "Confirm Booking"] as const;
+const STEPS = ["Specialty", "Doctor", "Date & time", "Confirm"] as const;
 
-const MOCK_DOCTORS: Doctor[] = [
-  { id: "d1", name: "Dr. Sarah Chen", specialization: "General Medicine", available: true },
-  { id: "d2", name: "Dr. Raj Patel", specialization: "Cardiology", available: true },
-  { id: "d3", name: "Dr. Emily Rodriguez", specialization: "Dermatology", available: true },
-  { id: "d4", name: "Dr. James Kim", specialization: "Orthopedics", available: true },
-  { id: "d5", name: "Dr. Priya Sharma", specialization: "Neurology", available: false },
-  { id: "d6", name: "Dr. Michael Foster", specialization: "Pediatrics", available: true },
-];
-
-function generateTimeSlots(): TimeSlot[] {
-  const slots: TimeSlot[] = [];
-  for (let h = 9; h <= 17; h++) {
-    for (const m of [0, 30]) {
-      if (h === 17 && m === 30) continue;
-      const hr = h.toString().padStart(2, "0");
-      const mn = m.toString().padStart(2, "0");
-      const label = `${h > 12 ? h - 12 : h}:${mn} ${h >= 12 ? "PM" : "AM"}`;
-      slots.push({ time: `${hr}:${mn}`, label, available: Math.random() > 0.3 });
-    }
+function getPatientId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const u = JSON.parse(localStorage.getItem("user") || "{}") as {
+      id?: string;
+      patient_id?: string;
+    };
+    return u.id ?? u.patient_id ?? null;
+  } catch {
+    return null;
   }
-  return slots;
 }
 
-function getNextSevenDays(): { date: Date; label: string; dayName: string }[] {
-  const days = [];
-  const today = new Date();
-  for (let i = 1; i <= 7; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    days.push({
-      date: d,
-      label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      dayName: d.toLocaleDateString("en-US", { weekday: "short" }),
-    });
-  }
-  return days;
+function formatSlotLabel(isoStart: string): string {
+  const d = new Date(isoStart);
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
-export default function BookingFlow({ onBooked, onCancel }: BookingFlowProps) {
+function doctorDisplayName(d: DoctorProfile): string {
+  return `Dr. ${d.specialization.split(/[;,]/)[0]?.trim() ?? "Provider"}`;
+}
+
+function placeholderRating(userId: string): string {
+  let n = 0;
+  for (let i = 0; i < userId.length; i += 1) n += userId.charCodeAt(i);
+  return (4 + (n % 10) / 10).toFixed(1);
+}
+
+export default function BookingFlow({ open, onClose, onBooked }: BookingFlowProps) {
+  const queryClient = useQueryClient();
   const [step, setStep] = useState(0);
-  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
+  const [specialtyId, setSpecialtyId] = useState<string | null>(null);
+  const [selectedDoctor, setSelectedDoctor] = useState<DoctorProfile | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [appointmentType, setAppointmentType] = useState<AppointmentType>("in_person");
+  const [selectedSlotStart, setSelectedSlotStart] = useState<string | null>(null);
+  const [appointmentType, setAppointmentType] = useState<
+    "in_person" | "telemedicine" | "follow_up" | "emergency"
+  >("in_person");
   const [reason, setReason] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
 
-  const dates = useMemo(() => getNextSevenDays(), []);
-  const timeSlots = useMemo(() => generateTimeSlots(), []);
+  const specSearch = specialtyId ? SPECIALTY_SEARCH[specialtyId] ?? specialtyId : "";
 
-  const filteredDoctors = useMemo(() => {
-    if (!searchQuery.trim()) return MOCK_DOCTORS;
-    const q = searchQuery.toLowerCase();
-    return MOCK_DOCTORS.filter(
-      (d) => d.name.toLowerCase().includes(q) || d.specialization.toLowerCase().includes(q)
-    );
-  }, [searchQuery]);
+  const doctorsQuery = useQuery({
+    queryKey: ["doctors", specSearch],
+    queryFn: async () => {
+      const res = await apiClient.get<DoctorProfile[]>("/doctors", {
+        params: { specialization: specSearch, limit: 50 },
+      });
+      const raw = res.data;
+      return Array.isArray(raw) ? raw : [];
+    },
+    enabled: open && step >= 1 && !!specSearch,
+  });
 
-  const canProceed = () => {
-    if (step === 0) return !!selectedDoctor;
-    if (step === 1) return !!selectedDate && !!selectedTime;
+  const dateIso = selectedDate
+    ? `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`
+    : null;
+
+  const availabilityQuery = useQuery({
+    queryKey: ["appointments", "availability", selectedDoctor?.user_id, dateIso],
+    queryFn: async () => {
+      if (!selectedDoctor?.user_id || !dateIso) return { available_slots: [] as AvailabilitySlot[] };
+      const res = await apiClient.get<{
+        available_slots?: AvailabilitySlot[];
+      }>(`/appointments/availability/${selectedDoctor.user_id}`, {
+        params: { date: dateIso },
+      });
+      return res.data;
+    },
+    enabled: open && step >= 2 && !!selectedDoctor?.user_id && !!dateIso,
+  });
+
+  const bookMutation = useMutation({
+    mutationFn: async () => {
+      const patientId = getPatientId();
+      if (!patientId || !selectedDoctor || !selectedSlotStart) {
+        throw new Error("Missing booking details.");
+      }
+      await apiClient.post("/appointments", {
+        patient_id: patientId,
+        doctor_id: selectedDoctor.user_id,
+        appointment_type: appointmentType,
+        scheduled_at: selectedSlotStart,
+        duration_minutes: 30,
+        reason: reason.trim() || null,
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      setStep(0);
+      setSpecialtyId(null);
+      setSelectedDoctor(null);
+      setSelectedDate(null);
+      setSelectedSlotStart(null);
+      setReason("");
+      setError(null);
+      onBooked();
+      onClose();
+    },
+    onError: () => {
+      setError("Could not book this slot. It may have been taken. Try another time.");
+    },
+  });
+
+  const dates = useMemo(() => {
+    const out: Date[] = [];
+    const today = new Date();
+    for (let i = 1; i <= 14; i += 1) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      d.setHours(0, 0, 0, 0);
+      out.push(d);
+    }
+    return out;
+  }, []);
+
+  const resetAndClose = () => {
+    setStep(0);
+    setSpecialtyId(null);
+    setSelectedDoctor(null);
+    setSelectedDate(null);
+    setSelectedSlotStart(null);
+    setReason("");
+    setError(null);
+    onClose();
+  };
+
+  const canNext = (): boolean => {
+    if (step === 0) return !!specialtyId;
+    if (step === 1) return !!selectedDoctor;
+    if (step === 2) return !!selectedDate && !!selectedSlotStart;
     return true;
   };
 
-  const handleBook = async () => {
-    if (!selectedDoctor || !selectedDate || !selectedTime) return;
-    setIsSubmitting(true);
+  const handleNext = () => {
     setError(null);
-    const scheduledAt = new Date(selectedDate);
-    const [h, m] = selectedTime.split(":").map(Number);
-    scheduledAt.setHours(h, m, 0, 0);
-    try {
-      await apiClient.post("/appointments", {
-        doctor_id: selectedDoctor.id, scheduled_at: scheduledAt.toISOString(),
-        appointment_type: appointmentType, duration_minutes: 30, reason: reason.trim() || null,
-      });
-      onBooked();
-    } catch { setError("Failed to book appointment. Please try again."); }
-    finally { setIsSubmitting(false); }
+    if (step < STEPS.length - 1) setStep((s) => s + 1);
   };
 
-  return (
-    <div className="rounded-xl border border-border bg-card shadow-sm">
-      <div className="border-b border-border px-5 py-4">
-        <div className="flex items-center gap-2">
-          {STEPS.map((label, i) => (
-            <div key={label} className="flex items-center gap-2">
-              {i > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-              <div className="flex items-center gap-1.5">
-                <div className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${i < step ? "bg-emerald-500 text-white" : i === step ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
-                  {i < step ? <Check className="h-3.5 w-3.5" /> : i + 1}
-                </div>
-                <span className={`hidden text-sm font-medium sm:inline ${i === step ? "text-foreground" : "text-muted-foreground"}`}>{label}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+  const handleBack = () => {
+    setError(null);
+    if (step === 0) resetAndClose();
+    else setStep((s) => s - 1);
+  };
 
-      <div className="p-5">
-        {step === 0 && (
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold text-foreground">Select a Doctor</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Choose a healthcare provider for your appointment.</p>
-            </div>
-            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search by name or specialty..." className="w-full rounded-md border border-input bg-background px-4 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
-            <div className="grid gap-3 sm:grid-cols-2">
-              {filteredDoctors.map((doc) => (
-                <button key={doc.id} type="button" disabled={!doc.available} onClick={() => setSelectedDoctor(doc)}
-                  className={`flex items-start gap-3 rounded-lg border p-4 text-left transition-colors ${selectedDoctor?.id === doc.id ? "border-primary bg-primary/5 ring-1 ring-primary" : doc.available ? "border-border hover:bg-accent" : "cursor-not-allowed border-border opacity-50"}`}>
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10"><User className="h-5 w-5 text-primary" /></div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{doc.name}</p>
-                    <p className="text-xs text-muted-foreground">{doc.specialization}</p>
-                    {!doc.available && <p className="mt-1 text-xs text-red-500">Not available</p>}
+  if (!open) return null;
+
+  const slots = availabilityQuery.data?.available_slots ?? [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/50"
+        aria-label="Close booking"
+        onClick={resetAndClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="booking-flow-title"
+        className="relative z-10 flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-xl sm:rounded-2xl"
+      >
+        <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6">
+          <h2 id="booking-flow-title" className="text-lg font-semibold text-foreground">
+            Book appointment
+          </h2>
+          <button
+            type="button"
+            onClick={resetAndClose}
+            className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="border-b border-border px-4 py-3 sm:px-6">
+          <div className="flex flex-wrap items-center gap-2">
+            {STEPS.map((label, i) => (
+              <div key={label} className="flex items-center gap-2">
+                {i > 0 && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                <div className="flex items-center gap-1.5">
+                  <div
+                    className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
+                      i < step
+                        ? "bg-emerald-500 text-white"
+                        : i === step
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {i < step ? <Check className="h-3.5 w-3.5" /> : i + 1}
                   </div>
-                </button>
-              ))}
-            </div>
+                  <span
+                    className={`hidden text-xs font-medium sm:inline sm:text-sm ${
+                      i === step ? "text-foreground" : "text-muted-foreground"
+                    }`}
+                  >
+                    {label}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
-        )}
-        {step === 1 && (
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold text-foreground">Choose Date and Time</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Select a convenient date and time for your visit with {selectedDoctor?.name}.</p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+          {step === 0 && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Choose the type of care you need. You can change this later before confirming.
+              </p>
+              <SpecialtySelector
+                variant="modal"
+                onSelect={(id) => {
+                  setSpecialtyId(id);
+                  setError(null);
+                }}
+              />
+              {!specialtyId && (
+                <p className="text-xs text-muted-foreground">Select a specialty to continue.</p>
+              )}
             </div>
-            <div>
-              <p className="mb-2 text-sm font-medium text-foreground">Appointment Type</p>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setAppointmentType("in_person")} className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${appointmentType === "in_person" ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:bg-accent"}`}><MapPin className="h-4 w-4" />In Person</button>
-                <button type="button" onClick={() => setAppointmentType("telemedicine")} className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${appointmentType === "telemedicine" ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:bg-accent"}`}><Video className="h-4 w-4" />Telemedicine</button>
-              </div>
-            </div>
-            <div>
-              <p className="mb-2 text-sm font-medium text-foreground"><Calendar className="mr-1 inline h-4 w-4" />Select Date</p>
-              <div className="flex gap-2 overflow-x-auto pb-2">
-                {dates.map((d) => (
-                  <button key={d.date.toISOString()} type="button" onClick={() => setSelectedDate(d.date)} className={`flex shrink-0 flex-col items-center rounded-lg border px-4 py-3 transition-colors ${selectedDate?.toDateString() === d.date.toDateString() ? "border-primary bg-primary/5 text-primary" : "border-border text-foreground hover:bg-accent"}`}>
-                    <span className="text-xs font-medium">{d.dayName}</span><span className="text-sm font-bold">{d.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            {selectedDate && (
+          )}
+
+          {step === 1 && (
+            <div className="space-y-4">
               <div>
-                <p className="mb-2 text-sm font-medium text-foreground"><Clock className="mr-1 inline h-4 w-4" />Select Time</p>
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
-                  {timeSlots.map((slot) => (
-                    <button key={slot.time} type="button" disabled={!slot.available} onClick={() => setSelectedTime(slot.time)} className={`rounded-md border px-3 py-2 text-sm font-medium transition-colors ${selectedTime === slot.time ? "border-primary bg-primary text-primary-foreground" : slot.available ? "border-border text-foreground hover:bg-accent" : "cursor-not-allowed border-border text-muted-foreground/50 line-through"}`}>{slot.label}</button>
+                <h3 className="text-base font-semibold text-foreground">Select a doctor</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Providers matching &quot;{specSearch}&quot;
+                </p>
+              </div>
+              {doctorsQuery.isLoading && (
+                <p className="text-sm text-muted-foreground">Loading doctors...</p>
+              )}
+              {doctorsQuery.isError && (
+                <p className="text-sm text-destructive">Could not load doctors. Try again.</p>
+              )}
+              {!doctorsQuery.isLoading && doctorsQuery.data?.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No doctors found for this specialty. Go back and try another.
+                </p>
+              )}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {doctorsQuery.data?.map((doc) => {
+                  const selected = selectedDoctor?.user_id === doc.user_id;
+                  const rating = placeholderRating(doc.user_id);
+                  return (
+                    <button
+                      key={doc.user_id}
+                      type="button"
+                      onClick={() => setSelectedDoctor(doc)}
+                      className={`flex gap-3 rounded-xl border p-4 text-left transition-all ${
+                        selected
+                          ? "border-primary ring-2 ring-primary/25 shadow-md"
+                          : "border-border hover:border-primary/40 hover:bg-accent"
+                      }`}
+                    >
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-muted">
+                        <User className="h-7 w-7 text-muted-foreground" aria-hidden />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-foreground">{doctorDisplayName(doc)}</p>
+                        <p className="text-xs text-muted-foreground">{doc.specialization}</p>
+                        <div className="mt-1 flex items-center gap-1 text-xs text-amber-600">
+                          <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-500" />
+                          <span>{rating}</span>
+                          <span className="text-muted-foreground">·</span>
+                          <span className="text-muted-foreground">
+                            {doc.years_of_experience != null
+                              ? `${doc.years_of_experience} yrs exp`
+                              : "Licensed physician"}
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {step === 2 && selectedDoctor && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-base font-semibold text-foreground">Date and time</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  With {doctorDisplayName(selectedDoctor)}
+                </p>
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-medium text-foreground">Visit type</p>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      ["in_person", "In person", MapPin],
+                      ["telemedicine", "Telemedicine", Video],
+                      ["follow_up", "Follow-up", Stethoscope],
+                      ["emergency", "Emergency", AlertCircle],
+                    ] as const
+                  ).map(([value, label, Icon]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() =>
+                        setAppointmentType(
+                          value as "in_person" | "telemedicine" | "follow_up" | "emergency"
+                        )
+                      }
+                      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${
+                        appointmentType === value
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:bg-accent"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {label}
+                    </button>
                   ))}
                 </div>
               </div>
-            )}
-            <div>
-              <label htmlFor="booking-reason" className="mb-1 block text-sm font-medium text-foreground">Reason for visit (optional)</label>
-              <textarea id="booking-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Brief description of your concern..." className="w-full rounded-md border border-input bg-background px-4 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
+              <div>
+                <p className="mb-2 text-sm font-medium text-foreground">
+                  <Calendar className="mr-1 inline h-4 w-4" />
+                  Date
+                </p>
+                <div className="flex gap-2 overflow-x-auto pb-2">
+                  {dates.map((d) => {
+                    const active =
+                      selectedDate?.toDateString() === d.toDateString();
+                    return (
+                      <button
+                        key={d.toISOString()}
+                        type="button"
+                        onClick={() => {
+                          setSelectedDate(d);
+                          setSelectedSlotStart(null);
+                        }}
+                        className={`flex shrink-0 flex-col items-center rounded-lg border px-3 py-2 transition-colors ${
+                          active
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border hover:bg-accent"
+                        }`}
+                      >
+                        <span className="text-xs">
+                          {d.toLocaleDateString(undefined, { weekday: "short" })}
+                        </span>
+                        <span className="text-sm font-semibold">
+                          {d.toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {selectedDate && (
+                <div>
+                  <p className="mb-2 text-sm font-medium text-foreground">
+                    <Clock className="mr-1 inline h-4 w-4" />
+                    Available times
+                  </p>
+                  {availabilityQuery.isLoading && (
+                    <p className="text-sm text-muted-foreground">Loading slots...</p>
+                  )}
+                  {availabilityQuery.isError && (
+                    <p className="text-sm text-destructive">Could not load availability.</p>
+                  )}
+                  {!availabilityQuery.isLoading && slots.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      No open slots this day. Pick another date.
+                    </p>
+                  )}
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                    {slots.map((slot) => (
+                      <button
+                        key={slot.start}
+                        type="button"
+                        onClick={() => setSelectedSlotStart(slot.start)}
+                        className={`rounded-md border px-2 py-2 text-sm font-medium ${
+                          selectedSlotStart === slot.start
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border hover:bg-accent"
+                        }`}
+                      >
+                        {formatSlotLabel(slot.start)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div>
+                <label htmlFor="book-reason" className="mb-1 block text-sm font-medium">
+                  Reason (optional)
+                </label>
+                <textarea
+                  id="book-reason"
+                  rows={2}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  placeholder="Brief reason for visit"
+                />
+              </div>
             </div>
-          </div>
-        )}
-        {step === 2 && selectedDoctor && selectedDate && selectedTime && (
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold text-foreground">Confirm Your Appointment</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Review the details below and confirm your booking.</p>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/30 p-5 space-y-3">
-              <div className="flex items-center gap-3"><Stethoscope className="h-5 w-5 text-primary" /><div><p className="text-sm font-semibold text-foreground">{selectedDoctor.name}</p><p className="text-xs text-muted-foreground">{selectedDoctor.specialization}</p></div></div>
-              <div className="flex items-center gap-3"><Calendar className="h-5 w-5 text-primary" /><p className="text-sm text-foreground">{selectedDate.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p></div>
-              <div className="flex items-center gap-3"><Clock className="h-5 w-5 text-primary" /><p className="text-sm text-foreground">{timeSlots.find((s) => s.time === selectedTime)?.label} (30 minutes)</p></div>
-              <div className="flex items-center gap-3">{appointmentType === "telemedicine" ? <Video className="h-5 w-5 text-purple-600" /> : <MapPin className="h-5 w-5 text-blue-600" />}<p className="text-sm text-foreground capitalize">{appointmentType.replace("_", " ")}</p></div>
-              {reason.trim() && <div className="border-t border-border pt-3"><p className="text-xs text-muted-foreground">Reason</p><p className="text-sm text-foreground">{reason}</p></div>}
-            </div>
-            {error && <div className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>}
-          </div>
-        )}
-      </div>
+          )}
 
-      <div className="flex items-center justify-between border-t border-border px-5 py-4">
-        <button type="button" onClick={step === 0 ? onCancel : () => setStep((s) => s - 1)} className="flex items-center gap-1 rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-muted"><ChevronLeft className="h-4 w-4" />{step === 0 ? "Cancel" : "Back"}</button>
-        {step < 2 ? (
-          <button type="button" disabled={!canProceed()} onClick={() => setStep((s) => s + 1)} className="flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">Next<ChevronRight className="h-4 w-4" /></button>
-        ) : (
-          <button type="button" disabled={isSubmitting} onClick={handleBook} className="flex items-center gap-1 rounded-md bg-emerald-600 px-5 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">{isSubmitting ? "Booking..." : "Confirm Booking"}<Check className="h-4 w-4" /></button>
-        )}
+          {step === 3 && selectedDoctor && selectedDate && selectedSlotStart && (
+            <div className="space-y-4">
+              <h3 className="text-base font-semibold text-foreground">Review</h3>
+              <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-4 text-sm">
+                <p>
+                  <span className="text-muted-foreground">Doctor:</span>{" "}
+                  <span className="font-medium text-foreground">
+                    {doctorDisplayName(selectedDoctor)}
+                  </span>
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Specialty:</span>{" "}
+                  {selectedDoctor.specialization}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">When:</span>{" "}
+                  {selectedDate.toLocaleDateString(undefined, {
+                    weekday: "long",
+                    month: "long",
+                    day: "numeric",
+                    year: "numeric",
+                  })}{" "}
+                  at {formatSlotLabel(selectedSlotStart)}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Type:</span>{" "}
+                  {appointmentType.replace("_", " ")}
+                </p>
+                {reason.trim() && (
+                  <p>
+                    <span className="text-muted-foreground">Reason:</span> {reason}
+                  </p>
+                )}
+              </div>
+              {error && (
+                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3 sm:px-6">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="inline-flex items-center gap-1 rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-muted"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            {step === 0 ? "Cancel" : "Back"}
+          </button>
+          {step < STEPS.length - 1 ? (
+            <button
+              type="button"
+              disabled={!canNext()}
+              onClick={handleNext}
+              className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={bookMutation.isPending}
+              onClick={() => {
+                setError(null);
+                bookMutation.mutate();
+              }}
+              className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-5 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {bookMutation.isPending ? "Booking..." : "Confirm"}
+              <Check className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
