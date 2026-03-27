@@ -1,3 +1,17 @@
+"use client";
+
+import dynamic from "next/dynamic";
+import { Mic, Shield, Globe, Brain } from "lucide-react";
+
+const VoiceRecorder = dynamic(() => import("@/components/voice/VoiceRecorder"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center py-16">
+      <p className="text-sm text-muted-foreground">Loading voice assistant...</p>
+    </div>
+  ),
+});
+
 export default function VoicePage() {
   return (
     <div className="space-y-8">
@@ -8,65 +22,56 @@ export default function VoicePage() {
         </p>
       </div>
 
-      <div className="rounded-lg border border-border bg-card shadow-sm">
-        <div className="flex flex-col items-center justify-center py-16 px-6">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-            <svg
-              className="h-8 w-8 text-primary"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z"
-              />
-            </svg>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="flex items-start gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            <Mic className="h-5 w-5 text-primary" />
           </div>
-          <h3 className="mt-4 text-lg font-semibold text-foreground">
-            Voice-Powered Health Assistant
-          </h3>
-          <p className="mt-2 max-w-md text-center text-sm text-muted-foreground">
-            Report symptoms, ask health questions, and get AI-powered guidance
-            through natural voice conversation. Supports 50+ languages via
-            OpenAI Whisper.
-          </p>
-          <div className="mt-6">
-            <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
-              Coming Soon
-            </span>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Real-time Transcription</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Your speech is transcribed in real time using the Web Speech API.
+            </p>
           </div>
-          <button
-            disabled
-            className="mt-4 flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground opacity-50"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z"
-              />
-            </svg>
-            Start Voice Session
-          </button>
+        </div>
+        <div className="flex items-start gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950/50">
+            <Brain className="h-5 w-5 text-emerald-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">AI Analysis</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Transcribed text is sent for AI-powered symptom analysis and guidance.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-950/50">
+            <Globe className="h-5 w-5 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Multi-Language</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Supports multiple languages via browser speech recognition.
+            </p>
+          </div>
         </div>
       </div>
 
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+        <VoiceRecorder />
+      </div>
+
       <div className="rounded-md border border-border bg-muted/50 px-4 py-3">
-        <p className="text-xs text-muted-foreground">
-          Voice interactions are transcribed using AI. By using this feature, you
-          consent to audio recording for the duration of the session. All
-          recordings are encrypted and stored in compliance with HIPAA
-          regulations.
-        </p>
+        <div className="flex items-start gap-2">
+          <Shield className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <p className="text-xs text-muted-foreground">
+            Voice interactions are processed using your browser&#39;s built-in speech recognition.
+            Audio is not recorded or stored on our servers. AI-generated responses are for
+            informational purposes only and are not a substitute for professional medical advice.
+            All data transmission is encrypted in compliance with HIPAA regulations.
+          </p>
+        </div>
       </div>
     </div>
   );
