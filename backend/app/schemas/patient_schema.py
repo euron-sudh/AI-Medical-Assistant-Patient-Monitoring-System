@@ -1,4 +1,4 @@
-"""Patient request/response schemas — Pydantic validation for patient endpoints."""
+"""Patient request/response schemas -- Pydantic validation for patient endpoints."""
 
 from datetime import date
 
@@ -92,3 +92,28 @@ class AllergyResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class UpdateMedicalHistoryStatusRequest(BaseModel):
+    """Schema for updating a medical history entry status."""
+
+    status: str = Field(pattern=r"^(active|resolved|chronic|managed)$")
+    notes: str | None = None
+
+
+class TimelineEntryResponse(BaseModel):
+    """Schema for a single patient timeline entry."""
+
+    timestamp: str
+    event_type: str
+    title: str
+    description: str
+    data: dict | None = None
+
+
+class AISummaryResponse(BaseModel):
+    """Schema for AI-generated patient health summary."""
+
+    patient_id: str
+    summary: str
+    generated_at: str
