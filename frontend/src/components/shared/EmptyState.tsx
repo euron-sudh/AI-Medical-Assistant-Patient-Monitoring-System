@@ -1,0 +1,5 @@
+"use client";
+interface EmptyStateProps { icon?: string; title: string; description?: string; actionLabel?: string; onAction?: () => void; className?: string; }
+export default function EmptyState({ icon = "R", title, description, actionLabel, onAction, className = "" }: EmptyStateProps) {
+  return (<div className={`rounded-lg border border-border bg-card p-6 shadow-sm ${className}`}><div className="flex flex-col items-center justify-center py-12"><div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted"><span className="text-2xl font-bold text-muted-foreground">{icon}</span></div><h3 className="mt-4 text-lg font-semibold text-foreground">{title}</h3>{description && <p className="mt-2 max-w-sm text-center text-sm text-muted-foreground">{description}</p>}{actionLabel && onAction && (<button onClick={onAction} className="mt-4 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">{actionLabel}</button>)}</div></div>);
+}
