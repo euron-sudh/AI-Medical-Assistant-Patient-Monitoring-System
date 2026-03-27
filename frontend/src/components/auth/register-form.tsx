@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { registerSchema, type RegisterFormData } from "@/lib/validators";
 import apiClient from "@/lib/api-client";
 import type { RegisterResponse, AuthError, UserRole } from "@/types/auth";
+import { GoogleSignIn } from "./google-sign-in";
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "patient", label: "Patient" },
@@ -230,6 +231,21 @@ export function RegisterForm() {
       >
         {isSubmitting ? "Creating account..." : "Create account"}
       </button>
+
+      {/* Google Sign-Up */}
+      <div className="relative my-2">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-border" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-background px-2 text-muted-foreground">Or sign up with</span>
+        </div>
+      </div>
+
+      <GoogleSignIn
+        text="signup_with"
+        onError={(msg) => setServerError(msg)}
+      />
     </form>
   );
 }

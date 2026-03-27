@@ -24,3 +24,4 @@ bcrypt>=4.1
 cryptography>=42.0
 eventlet>=0.35
 gunicorn>=22.0
+requests>=2.31
