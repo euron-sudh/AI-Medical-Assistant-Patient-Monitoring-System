@@ -244,9 +244,27 @@ class DoctorService:
 
     @staticmethod
     def _to_response(profile: DoctorProfile) -> DoctorProfileResponse:
+        from app.models.user import User
+
+        first_name = None
+        last_name = None
+        email = None
+        try:
+            user = db.session.get(User, profile.user_id)
+            if user:
+                first_name = user.first_name
+                last_name = user.last_name
+                email = user.email
+        except Exception:
+            pass
+
         return DoctorProfileResponse(
             id=str(profile.id),
             user_id=str(profile.user_id),
+            first_name=first_name,
+            last_name=last_name,
+            name=f"Dr. {first_name} {last_name}" if first_name else None,
+            email=email,
             specialization=profile.specialization,
             license_number=profile.license_number,
             license_state=profile.license_state,
