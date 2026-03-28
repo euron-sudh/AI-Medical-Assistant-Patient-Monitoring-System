@@ -98,15 +98,15 @@ function SymptomsPageContent() {
   };
 
   const startSession = async () => {
-    
+
     // API key is pre-configured on backend
     setIsLoading(true); setError(null); setSessionResult(null); setMessages([]);
     try {
-      const res = await apiClient.post("/symptoms/session", {});
+      const specialtyLabel = selectedSpecialty ? selectedSpecialty.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) : "General";
+      const res = await apiClient.post("/symptoms/session", { chief_complaint: `Symptom check - ${specialtyLabel}` });
       const id = res.data?.session_id ?? res.data?.id;
       setSessionId(id);
-      const specialtyLabel = selectedSpecialty ? selectedSpecialty.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) : null;
-      setMessages([{ role: "assistant", content: specialtyLabel ? `Hello! I am the MedAssist Symptom Analyst, focused on ${specialtyLabel}. Please describe your symptoms in detail.` : "Hello! I am the MedAssist Symptom Analyst. Please describe your symptoms in detail. What are you experiencing?" }]);
+      setMessages([{ role: "assistant", content: selectedSpecialty ? `Hello! I am the MedAssist Symptom Analyst, focused on ${specialtyLabel}. Please describe your symptoms in detail.` : "Hello! I am the MedAssist Symptom Analyst. Please describe your symptoms in detail. What are you experiencing?" }]);
     } catch (err: unknown) {
       const msg = extractErrorMessage(err, "Failed to start symptom session.");
       setError(msg);

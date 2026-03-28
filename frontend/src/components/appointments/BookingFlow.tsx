@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Calendar,
   Clock,
@@ -36,7 +36,7 @@ interface BookingFlowProps {
 
 const STEPS = ["Select Doctor", "Choose Date & Time", "Confirm Booking"] as const;
 
-const MOCK_DOCTORS: Doctor[] = [
+const FALLBACK_DOCTORS: Doctor[] = [
   { id: "d1", name: "Dr. Sarah Chen", specialization: "General Medicine", available: true },
   { id: "d2", name: "Dr. Raj Patel", specialization: "Cardiology", available: true },
   { id: "d3", name: "Dr. Emily Rodriguez", specialization: "Dermatology", available: true },
@@ -84,17 +84,32 @@ export default function BookingFlow({ onBooked, onCancel }: BookingFlowProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [doctors, setDoctors] = useState<Doctor[]>(FALLBACK_DOCTORS);
+
+  useEffect(() => {
+    apiClient.get("/doctors").then((res) => {
+      const list = res.data?.doctors ?? res.data ?? [];
+      if (Array.isArray(list) && list.length > 0) {
+        setDoctors(list.map((d: Record<string, unknown>) => ({
+          id: String(d.id ?? d.user_id ?? ""),
+          name: d.name ? String(d.name) : `Dr. ${d.first_name ?? ""} ${d.last_name ?? ""}`.trim(),
+          specialization: String(d.specialization ?? "General Medicine"),
+          available: d.available !== false,
+        })));
+      }
+    }).catch(() => { /* use fallback doctors */ });
+  }, []);
 
   const dates = useMemo(() => getNextSevenDays(), []);
   const timeSlots = useMemo(() => generateTimeSlots(), []);
 
   const filteredDoctors = useMemo(() => {
-    if (!searchQuery.trim()) return MOCK_DOCTORS;
+    if (!searchQuery.trim()) return doctors;
     const q = searchQuery.toLowerCase();
-    return MOCK_DOCTORS.filter(
+    return doctors.filter(
       (d) => d.name.toLowerCase().includes(q) || d.specialization.toLowerCase().includes(q)
     );
-  }, [searchQuery]);
+  }, [searchQuery, doctors]);
 
   const canProceed = () => {
     if (step === 0) return !!selectedDoctor;
@@ -110,7 +125,11 @@ export default function BookingFlow({ onBooked, onCancel }: BookingFlowProps) {
     const [h, m] = selectedTime.split(":").map(Number);
     scheduledAt.setHours(h, m, 0, 0);
     try {
+      const userStr = localStorage.getItem("user");
+      const patientId = userStr ? JSON.parse(userStr).id : null;
+      if (!patientId) { setError("Please log in again."); setIsSubmitting(false); return; }
       await apiClient.post("/appointments", {
+        patient_id: patientId,
         doctor_id: selectedDoctor.id, scheduled_at: scheduledAt.toISOString(),
         appointment_type: appointmentType, duration_minutes: 30, reason: reason.trim() || null,
       });
