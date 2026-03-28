@@ -83,8 +83,11 @@ jobs:
           gcloud compute scp docker-compose.prod.yml ${VM_NAME}:/tmp/medassist-deploy/docker-compose.prod.yml \
             --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
 
-          gcloud compute scp .env.prod ${VM_NAME}:/tmp/medassist-deploy/.env.prod \
-            --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
+          # Copy .env.prod only if it exists in the checkout (it's gitignored, so it may not be present)
+          if [ -f .env.prod ]; then
+            gcloud compute scp .env.prod ${VM_NAME}:/tmp/medassist-deploy/.env.prod \
+              --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
+          fi
 
           gcloud compute scp --recurse nginx ${VM_NAME}:/tmp/medassist-deploy/ \
             --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
@@ -92,7 +95,7 @@ jobs:
           # Move files into place and restart with sudo
           gcloud compute ssh ${VM_NAME} --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID} --command="
             sudo cp /tmp/medassist-deploy/docker-compose.prod.yml /opt/medassist/docker-compose.prod.yml
-            sudo cp /tmp/medassist-deploy/.env.prod /opt/medassist/.env.prod
+            [ -f /tmp/medassist-deploy/.env.prod ] && sudo cp /tmp/medassist-deploy/.env.prod /opt/medassist/.env.prod
             sudo cp -r /tmp/medassist-deploy/nginx/* /opt/medassist/nginx/
             rm -rf /tmp/medassist-deploy
             cd /opt/medassist
