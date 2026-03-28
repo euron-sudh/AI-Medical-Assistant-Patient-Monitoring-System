@@ -53,9 +53,18 @@ async function fetchTTSAudio(
       },
       body: JSON.stringify({ model: "tts-1", voice, input: text }),
     });
-    if (!res.ok) return null;
-    return await res.arrayBuffer();
-  } catch {
+    if (!res.ok) {
+      console.error(`TTS API error: ${res.status} ${res.statusText}`);
+      return null;
+    }
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength === 0) {
+      console.error("TTS API returned empty audio buffer");
+      return null;
+    }
+    return buf;
+  } catch (err) {
+    console.error("TTS API fetch failed:", err);
     return null;
   }
 }
@@ -334,27 +343,52 @@ function useCountUp(target: number, durationMs: number, startDelay: number, elap
 }
 
 /* ==========================================================================
-   TTS AUDIO HOOK (with pre-fetch)
+   TTS AUDIO HOOK (with pre-fetch, volume, loading, error state)
    ========================================================================== */
 
 function useTTSAudio() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const cacheRef = useRef<Map<string, ArrayBuffer>>(new Map());
+  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const volumeRef = useRef(1);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
-  const prefetch = useCallback(async (text: string, voice: VoiceOption) => {
+  const clearFallbackTimer = useCallback(() => {
+    if (fallbackTimerRef.current) {
+      clearTimeout(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
+    }
+  }, []);
+
+  const prefetch = useCallback(async (text: string, voice: VoiceOption): Promise<boolean> => {
     const key = `${voice}:${text.slice(0, 60)}`;
-    if (cacheRef.current.has(key)) return;
+    if (cacheRef.current.has(key)) return true;
     const buf = await fetchTTSAudio(text, voice);
-    if (buf) cacheRef.current.set(key, buf);
+    if (buf) {
+      cacheRef.current.set(key, buf);
+      return true;
+    }
+    return false;
+  }, []);
+
+  const setVolume = useCallback((vol: number) => {
+    volumeRef.current = Math.max(0, Math.min(1, vol));
+    if (audioRef.current) {
+      audioRef.current.volume = volumeRef.current;
+    }
   }, []);
 
   const play = useCallback(
     async (text: string, voice: VoiceOption, onEnd?: () => void) => {
+      // Stop any current playback
+      clearFallbackTimer();
       if (audioRef.current) {
         audioRef.current.pause();
-        audioRef.current.removeAttribute("src");
+        audioRef.current.onended = null;
+        audioRef.current.onerror = null;
         audioRef.current = null;
       }
       if (objectUrlRef.current) {
@@ -362,57 +396,102 @@ function useTTSAudio() {
         objectUrlRef.current = null;
       }
 
+      setHasError(false);
+      setIsLoading(true);
+      setIsSpeaking(false);
+
       const key = `${voice}:${text.slice(0, 60)}`;
       let buffer = cacheRef.current.get(key) ?? null;
-      if (!buffer) buffer = await fetchTTSAudio(text, voice);
       if (!buffer) {
-        setIsSpeaking(true);
+        buffer = await fetchTTSAudio(text, voice);
+        if (buffer) {
+          cacheRef.current.set(key, buffer);
+        }
+      }
+
+      // TTS fetch failed -- show error, use timer fallback for scene advancement
+      if (!buffer) {
+        setIsLoading(false);
+        setHasError(true);
+        setIsSpeaking(false);
         const fallbackMs = Math.max(text.length * 65, 4000);
-        const timer = setTimeout(() => {
-          setIsSpeaking(false);
+        fallbackTimerRef.current = setTimeout(() => {
+          setHasError(false);
           onEnd?.();
         }, fallbackMs);
-        return () => clearTimeout(timer);
+        return;
       }
+
+      setIsLoading(false);
 
       const blob = new Blob([buffer], { type: "audio/mpeg" });
       const url = URL.createObjectURL(blob);
       objectUrlRef.current = url;
 
       const audio = new Audio(url);
+      audio.volume = volumeRef.current;
+      audio.preload = "auto";
       audioRef.current = audio;
-      setIsSpeaking(true);
+
       audio.onended = () => {
         setIsSpeaking(false);
         onEnd?.();
       };
-      audio.play().catch(() => {
-        setIsSpeaking(true);
+
+      audio.onerror = () => {
+        console.error("Audio playback error");
+        setIsSpeaking(false);
+        setHasError(true);
+        // Fall back to timer-based advancement
         const fallbackMs = Math.max(text.length * 65, 4000);
-        const timer = setTimeout(() => {
-          setIsSpeaking(false);
+        fallbackTimerRef.current = setTimeout(() => {
+          setHasError(false);
           onEnd?.();
         }, fallbackMs);
-        return () => clearTimeout(timer);
-      });
+      };
+
+      try {
+        await audio.play();
+        setIsSpeaking(true);
+      } catch (playErr) {
+        console.error("Audio play() rejected:", playErr);
+        setIsSpeaking(false);
+        setHasError(true);
+        // Timer fallback for auto-advance
+        const fallbackMs = Math.max(text.length * 65, 4000);
+        fallbackTimerRef.current = setTimeout(() => {
+          setHasError(false);
+          onEnd?.();
+        }, fallbackMs);
+      }
     },
-    []
+    [clearFallbackTimer]
   );
 
   const pause = useCallback(() => {
-    audioRef.current?.pause();
+    clearFallbackTimer();
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
     setIsSpeaking(false);
-  }, []);
+  }, [clearFallbackTimer]);
 
   const resume = useCallback(() => {
-    audioRef.current?.play().catch(() => {});
-    if (audioRef.current && !audioRef.current.ended) setIsSpeaking(true);
+    if (audioRef.current && !audioRef.current.ended) {
+      audioRef.current.play().then(() => {
+        setIsSpeaking(true);
+      }).catch(() => {
+        // Already paused or disposed
+      });
+    }
   }, []);
 
   const stop = useCallback(() => {
+    clearFallbackTimer();
     if (audioRef.current) {
       audioRef.current.pause();
-      audioRef.current.removeAttribute("src");
+      audioRef.current.onended = null;
+      audioRef.current.onerror = null;
       audioRef.current = null;
     }
     if (objectUrlRef.current) {
@@ -420,19 +499,24 @@ function useTTSAudio() {
       objectUrlRef.current = null;
     }
     setIsSpeaking(false);
-  }, []);
+    setIsLoading(false);
+    setHasError(false);
+  }, [clearFallbackTimer]);
 
   useEffect(() => {
     return () => {
+      clearFallbackTimer();
       if (audioRef.current) {
         audioRef.current.pause();
+        audioRef.current.onended = null;
+        audioRef.current.onerror = null;
         audioRef.current = null;
       }
       if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
     };
-  }, []);
+  }, [clearFallbackTimer]);
 
-  return { play, pause, resume, stop, prefetch, isSpeaking };
+  return { play, pause, resume, stop, prefetch, setVolume, isSpeaking, isLoading, hasError };
 }
 
 /* ==========================================================================
@@ -531,6 +615,8 @@ export default function DemoPage() {
   const [narrationEnabled, setNarrationEnabled] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -581,12 +667,14 @@ export default function DemoPage() {
       const scene = SCENES[index];
       sceneStartRef.current = Date.now();
 
-      // Pre-fetch next scene audio
+      // Pre-fetch next scene audio in background
       if (index + 1 < SCENES.length) {
         tts.prefetch(SCENES[index + 1].narration, voice);
       }
 
-      if (narrationEnabled && !muted) {
+      if (narrationEnabled) {
+        // Set current volume before playing (handles mute state)
+        tts.setVolume(muted ? 0 : volume);
         tts.play(scene.narration, voice, () => {
           if (autoAdvance) {
             timerRef.current = setTimeout(() => advanceScene(), 1200);
@@ -596,7 +684,7 @@ export default function DemoPage() {
         timerRef.current = setTimeout(() => advanceScene(), scene.durationMs);
       }
     },
-    [tts, voice, advanceScene, autoAdvance, narrationEnabled, muted]
+    [tts, voice, advanceScene, autoAdvance, narrationEnabled, muted, volume]
   );
 
   /* -- Effect: play current scene when it changes -- */
@@ -626,16 +714,22 @@ export default function DemoPage() {
   }, [playing, isPaused, currentScene, cumulativeDurations, totalDuration]);
 
   /* -- Controls -- */
-  const handleStart = useCallback(() => {
+  const handleStart = useCallback(async () => {
+    if (narrationEnabled) {
+      // Pre-fetch first scene audio BEFORE starting -- user has clicked so autoplay is allowed
+      setIsLoadingAudio(true);
+      await tts.prefetch(SCENES[0].narration, voice);
+      // Also kick off prefetch for scene 2 in background
+      if (SCENES.length > 1) {
+        tts.prefetch(SCENES[1].narration, voice);
+      }
+      setIsLoadingAudio(false);
+    }
     setStarted(true);
     setPlaying(true);
     setIsPaused(false);
     setCurrentScene(0);
     setProgress(0);
-    // Pre-fetch first scene audio
-    if (narrationEnabled) {
-      tts.prefetch(SCENES[0].narration, voice);
-    }
   }, [narrationEnabled, tts, voice]);
 
   const togglePlayPause = useCallback(() => {
@@ -681,11 +775,26 @@ export default function DemoPage() {
 
   const toggleMute = useCallback(() => {
     setMuted((m) => {
-      if (!m) tts.pause();
-      else tts.resume();
+      if (!m) {
+        tts.setVolume(0);
+      } else {
+        tts.setVolume(volume);
+      }
       return !m;
     });
-  }, [tts]);
+  }, [tts, volume]);
+
+  const handleVolumeChange = useCallback((newVol: number) => {
+    setVolume(newVol);
+    if (!muted) {
+      tts.setVolume(newVol);
+    }
+    if (newVol === 0) {
+      setMuted(true);
+    } else if (muted) {
+      setMuted(false);
+    }
+  }, [tts, muted]);
 
   /* -- Keyboard shortcuts -- */
   useEffect(() => {
@@ -803,12 +912,22 @@ export default function DemoPage() {
 
             <button
               onClick={handleStart}
+              disabled={isLoadingAudio}
               style={{ animation: "fadeInUp 0.8s ease-out 0.7s both" }}
-              className="group relative inline-flex items-center gap-3 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 px-12 py-4.5 text-lg font-bold text-white shadow-2xl shadow-sky-500/25 transition-all hover:scale-[1.03] hover:shadow-sky-500/40 active:scale-[0.98]"
+              className="group relative inline-flex items-center gap-3 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 px-12 py-4.5 text-lg font-bold text-white shadow-2xl shadow-sky-500/25 transition-all hover:scale-[1.03] hover:shadow-sky-500/40 active:scale-[0.98] disabled:opacity-80 disabled:cursor-wait disabled:hover:scale-100"
             >
               <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-sky-400 to-blue-500 opacity-0 blur-lg transition-opacity group-hover:opacity-30" />
-              <PlayTriangleIcon className="relative h-6 w-6" />
-              <span className="relative">Begin Product Demo</span>
+              {isLoadingAudio ? (
+                <>
+                  <div className="relative h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  <span className="relative">Loading Voice...</span>
+                </>
+              ) : (
+                <>
+                  <PlayTriangleIcon className="relative h-6 w-6" />
+                  <span className="relative">Begin Product Demo</span>
+                </>
+              )}
             </button>
 
             <p style={{ animation: "fadeIn 1s ease-out 1s both" }} className="mt-8 text-sm text-blue-300/40">
@@ -871,25 +990,51 @@ export default function DemoPage() {
           </div>
         </div>
 
-        {/* ---- Narration bar with waveform ---- */}
+        {/* ---- Narration bar with waveform / loading / error / subtitles ---- */}
         <div className="border-t border-white/[0.06] bg-black/40 backdrop-blur-sm px-4 py-2.5 md:px-8">
           <div className="mx-auto flex max-w-4xl items-start gap-3">
-            {/* Voice waveform indicator */}
+            {/* Voice status indicator */}
             <div className="mt-1 flex items-end gap-[3px]" aria-hidden>
-              {[1, 2, 3, 1, 2].map((variant, i) => (
-                <div
-                  key={i}
-                  className={`w-[3px] rounded-full transition-colors ${tts.isSpeaking ? "bg-sky-400" : "bg-white/20"}`}
-                  style={{
-                    height: tts.isSpeaking ? undefined : "6px",
-                    animation: tts.isSpeaking ? `waveform${variant} 0.${4 + i}s ease-in-out infinite` : "none",
-                  }}
-                />
-              ))}
+              {tts.isLoading ? (
+                /* Loading spinner */
+                <div className="flex items-center gap-1">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-sky-400/30 border-t-sky-400" />
+                </div>
+              ) : tts.hasError ? (
+                /* Error indicator */
+                <div className="flex items-center gap-1" title="Voice narration unavailable">
+                  <svg className="h-4 w-4 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="15" y1="9" x2="9" y2="15" />
+                    <line x1="9" y1="9" x2="15" y2="15" />
+                  </svg>
+                </div>
+              ) : (
+                /* Waveform bars */
+                [1, 2, 3, 1, 2].map((variant, i) => (
+                  <div
+                    key={i}
+                    className={`w-[3px] rounded-full transition-colors ${tts.isSpeaking && !muted ? "bg-sky-400" : "bg-white/20"}`}
+                    style={{
+                      height: tts.isSpeaking && !muted ? undefined : "6px",
+                      animation: tts.isSpeaking && !muted ? `waveform${variant} 0.${4 + i}s ease-in-out infinite` : "none",
+                    }}
+                  />
+                ))
+              )}
             </div>
-            <p className="min-h-[2.5rem] flex-1 text-center text-[13px] leading-relaxed text-blue-100/70 md:text-sm">
-              {scene?.narration}
-            </p>
+            {/* Status label + narration text (subtitles) */}
+            <div className="min-h-[2.5rem] flex-1 text-center">
+              {tts.isLoading && (
+                <p className="mb-0.5 text-[11px] font-medium text-sky-400/80 animate-pulse">Loading voice...</p>
+              )}
+              {tts.hasError && (
+                <p className="mb-0.5 text-[11px] font-medium text-red-400/80">Voice unavailable -- reading subtitles</p>
+              )}
+              <p className="text-[13px] leading-relaxed text-blue-100/70 md:text-sm">
+                {scene?.narration}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -942,10 +1087,22 @@ export default function DemoPage() {
               ))}
             </div>
 
-            {/* Volume */}
-            <button onClick={toggleMute} className={`rounded-lg p-2 transition hover:bg-white/10 ${muted ? "text-red-400/70" : "text-white/50 hover:text-white/80"}`} aria-label={muted ? "Unmute" : "Mute"}>
-              {muted ? <MuteIcon /> : <SpeakerIcon className="h-4 w-4" />}
-            </button>
+            {/* Volume control with slider */}
+            <div className="flex items-center gap-1.5 group">
+              <button onClick={toggleMute} className={`rounded-lg p-2 transition hover:bg-white/10 ${muted ? "text-red-400/70" : "text-white/50 hover:text-white/80"}`} aria-label={muted ? "Unmute" : "Mute"}>
+                {muted || volume === 0 ? <MuteIcon /> : <SpeakerIcon className="h-4 w-4" />}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={muted ? 0 : volume}
+                onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                className="hidden h-1 w-16 cursor-pointer appearance-none rounded-full bg-white/20 accent-sky-400 md:block [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-sky-400"
+                aria-label="Volume"
+              />
+            </div>
 
             {/* Voice selector */}
             <div className="hidden items-center gap-0.5 rounded-lg bg-white/5 p-0.5 md:flex">
