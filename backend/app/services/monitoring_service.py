@@ -329,9 +329,20 @@ class MonitoringService:
 
     @staticmethod
     def _alert_to_dict(a: MonitoringAlert) -> dict[str, Any]:
+        from app.models.user import User
+
+        patient_name = None
+        try:
+            patient = db.session.get(User, a.patient_id)
+            if patient:
+                patient_name = f"{patient.first_name} {patient.last_name}"
+        except Exception:
+            pass
+
         return {
             "id": str(a.id),
             "patient_id": str(a.patient_id),
+            "patient_name": patient_name,
             "vitals_reading_id": str(a.vitals_reading_id) if a.vitals_reading_id else None,
             "alert_type": a.alert_type,
             "severity": a.severity,

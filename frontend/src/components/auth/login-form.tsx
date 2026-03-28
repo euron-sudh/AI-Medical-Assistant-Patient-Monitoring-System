@@ -213,7 +213,7 @@ export function LoginForm() {
         <div className="space-y-2">
           <button
             type="button"
-            onClick={() => fillTestCredentials("sarah.johnson@medassist.ai", "Demo1234!")}
+            onClick={() => fillTestCredentials("patient@demo.dev", "Demo1234!")}
             className="group flex w-full items-center gap-3 rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-left transition-all duration-200 hover:border-blue-200 hover:shadow-sm"
           >
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-100 text-xs font-bold text-blue-600">
@@ -226,7 +226,7 @@ export function LoginForm() {
                   PATIENT
                 </span>
               </div>
-              <p className="truncate text-xs text-gray-400">sarah.johnson@medassist.ai</p>
+              <p className="truncate text-xs text-gray-400">patient@demo.dev</p>
             </div>
             <svg className="h-4 w-4 shrink-0 text-gray-300 transition-colors group-hover:text-blue-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
@@ -235,7 +235,7 @@ export function LoginForm() {
 
           <button
             type="button"
-            onClick={() => fillTestCredentials("priya.sharma@medassist.ai", "Demo1234!")}
+            onClick={() => fillTestCredentials("doctor@demo.dev", "Demo1234!")}
             className="group flex w-full items-center gap-3 rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-left transition-all duration-200 hover:border-emerald-200 hover:shadow-sm"
           >
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-xs font-bold text-emerald-600">
@@ -248,7 +248,7 @@ export function LoginForm() {
                   DOCTOR
                 </span>
               </div>
-              <p className="truncate text-xs text-gray-400">priya.sharma@medassist.ai</p>
+              <p className="truncate text-xs text-gray-400">doctor@demo.dev</p>
             </div>
             <svg className="h-4 w-4 shrink-0 text-gray-300 transition-colors group-hover:text-emerald-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
@@ -257,7 +257,7 @@ export function LoginForm() {
 
           <button
             type="button"
-            onClick={() => fillTestCredentials("admin@medassist.ai", "Demo1234!")}
+            onClick={() => fillTestCredentials("admin@demo.dev", "Demo1234!")}
             className="group flex w-full items-center gap-3 rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-left transition-all duration-200 hover:border-purple-200 hover:shadow-sm"
           >
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-purple-100 text-xs font-bold text-purple-600">
@@ -270,7 +270,7 @@ export function LoginForm() {
                   ADMIN
                 </span>
               </div>
-              <p className="truncate text-xs text-gray-400">admin@medassist.ai</p>
+              <p className="truncate text-xs text-gray-400">admin@demo.dev</p>
             </div>
             <svg className="h-4 w-4 shrink-0 text-gray-300 transition-colors group-hover:text-purple-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />

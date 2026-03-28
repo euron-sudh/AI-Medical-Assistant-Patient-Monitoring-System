@@ -170,9 +170,23 @@ class AuditService:
 
     def _to_response(self, log: AuditLog) -> AuditLogResponse:
         """Convert an AuditLog model to an AuditLogResponse schema."""
+        from app.models.user import User
+
+        user_name = None
+        user_email = None
+        try:
+            user = db.session.get(User, log.user_id)
+            if user:
+                user_name = f"{user.first_name} {user.last_name}"
+                user_email = user.email
+        except Exception:
+            pass
+
         return AuditLogResponse(
             id=str(log.id),
             user_id=str(log.user_id),
+            user_name=user_name,
+            user_email=user_email,
             action=log.action,
             resource_type=log.resource_type,
             resource_id=str(log.resource_id) if log.resource_id else None,
