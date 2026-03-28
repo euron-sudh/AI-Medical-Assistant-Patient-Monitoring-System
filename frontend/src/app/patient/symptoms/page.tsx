@@ -36,7 +36,7 @@ function SymptomsPageContent() {
   const [selectedSpecialty, setSelectedSpecialty] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { const key = localStorage.getItem("euriApiKey"); setHasApiKey(!!key && key.startsWith("euri-")); loadPastSessions(); }, []);
+  useEffect(() => { setHasApiKey(true); // API key is pre-configured loadPastSessions(); }, []);
 
   const specialtyParam = searchParams.get("specialty");
   const resumeParam = searchParams.get("resume");
@@ -98,11 +98,11 @@ function SymptomsPageContent() {
   };
 
   const startSession = async () => {
-    const euriKey = localStorage.getItem("euriApiKey") ?? "";
-    if (!euriKey) { setShowKeyModal(true); return; }
+    
+    // API key is pre-configured on backend
     setIsLoading(true); setError(null); setSessionResult(null); setMessages([]);
     try {
-      const res = await apiClient.post("/symptoms/session", {}, { headers: { "X-Euri-Api-Key": euriKey } });
+      const res = await apiClient.post("/symptoms/session", {});
       const id = res.data?.session_id ?? res.data?.id;
       setSessionId(id);
       const specialtyLabel = selectedSpecialty ? selectedSpecialty.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) : null;
@@ -116,13 +116,13 @@ function SymptomsPageContent() {
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading || !sessionId) return;
-    const euriKey = localStorage.getItem("euriApiKey") ?? "";
-    if (!euriKey) { setShowKeyModal(true); return; }
+    
+    // API key is pre-configured on backend
     const userMessage: Message = { role: "user", content: input.trim() };
     setMessages((prev) => [...prev, userMessage]);
     setInput(""); setIsLoading(true); setError(null);
     try {
-      const res = await apiClient.post(`/symptoms/session/${sessionId}/message`, { message: userMessage.content }, { headers: { "X-Euri-Api-Key": euriKey } });
+      const res = await apiClient.post(`/symptoms/session/${sessionId}/message`, { message: userMessage.content });
       const data = res.data;
       const aiContent = data?.response ?? data?.message ?? data?.ai_response ?? "No response received.";
       setMessages((prev) => [...prev, { role: "assistant", content: aiContent }]);

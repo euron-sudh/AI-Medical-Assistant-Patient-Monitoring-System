@@ -35,17 +35,16 @@ export default function AIAssistantPage() {
   const [specialty, setSpecialty] = useState("general");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { const k = localStorage.getItem("euriApiKey"); setHasApiKey(!!k && k.startsWith("euri-")); }, []);
+  useEffect(() => { setHasApiKey(true); // API key is pre-configured }, []);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
-    const euriKey = localStorage.getItem("euriApiKey") ?? "";
-    if (!euriKey) { setShowKeyModal(true); return; }
+    
     const userMessage: Message = { role: "user", content: input.trim() };
     setMessages((prev) => [...prev, userMessage]); setInput(""); setIsLoading(true); setError(null);
     try {
-      const response = await apiClient.post("/chat/message", { message: userMessage.content, history: messages.slice(-10), context: `doctor_clinical_assistant_${specialty}` }, { headers: { "X-Euri-Api-Key": euriKey } });
+      const response = await apiClient.post("/chat/message", { message: userMessage.content, history: messages.slice(-10), context: `doctor_clinical_assistant_${specialty}` });
       setMessages((prev) => [...prev, { role: "assistant", content: response.data.response }]);
     } catch (err: unknown) {
       const errData = err && typeof err === "object" && "response" in err && err.response && typeof err.response === "object" && "data" in err.response ? (err.response as { data: { error?: { message?: string } } }).data : null;

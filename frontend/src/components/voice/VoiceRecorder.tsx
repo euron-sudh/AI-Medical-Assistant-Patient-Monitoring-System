@@ -63,8 +63,7 @@ export default function VoiceRecorder() {
     setIsProcessing(true);
     setError(null);
     try {
-      const euriKey = localStorage.getItem("euriApiKey") ?? "";
-      const res = await apiClient.post("/ai/chat", { message: `[Voice input] Patient says: ${text}. Please analyze these symptoms and provide medical guidance.` }, { headers: euriKey ? { "X-Euri-Api-Key": euriKey } : {} });
+      const res = await apiClient.post("/chat/message", { message: `[Voice input] Patient says: ${text}. Please analyze these symptoms and provide medical guidance.`, conversation_type: "general" });
       const aiContent = res.data?.response ?? res.data?.message ?? res.data?.ai_response ?? "I received your input. Please consult with a healthcare professional for detailed analysis.";
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", content: aiContent, timestamp: new Date() }]);
     } catch { setError("Failed to get AI response. Please try again."); }

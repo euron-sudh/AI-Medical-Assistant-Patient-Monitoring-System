@@ -19,8 +19,7 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const key = localStorage.getItem("euriApiKey");
-    setHasApiKey(!!key && key.startsWith("euri-"));
+    setHasApiKey(true); // API key is pre-configured on backend
   }, []);
 
   useEffect(() => {
@@ -30,11 +29,7 @@ export default function ChatPage() {
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
-    const euriKey = localStorage.getItem("euriApiKey") ?? "";
-    if (!euriKey) {
-      setShowKeyModal(true);
-      return;
-    }
+    const euriKey = ""; // Backend uses its own key
 
     const userMessage: Message = { role: "user", content: input.trim() };
     setMessages((prev) => [...prev, userMessage]);
