@@ -111,8 +111,10 @@ jobs:
             sudo -E docker compose -f docker-compose.prod.yml pull
             sudo -E docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
-            # Wait for services to stabilize
-            sleep 10
+            # Wait for services to stabilize then restart nginx to pick up new container IPs
+            sleep 15
+            sudo docker compose -f docker-compose.prod.yml restart nginx
+            sleep 5
 
             # Cleanup
             sudo docker image prune -f
@@ -135,9 +137,9 @@ jobs:
             --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
 
           echo "VM IP: ${VM_IP}"
-          sleep 15
+          sleep 20
 
-          for i in 1 2 3 4 5; do
+          for i in 1 2 3 4 5 6; do
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://${VM_IP}/health" --max-time 10 2>/dev/null || echo "000")
             if [ "${HTTP_CODE}" = "200" ]; then
               echo "Health check PASSED (attempt ${i})"
