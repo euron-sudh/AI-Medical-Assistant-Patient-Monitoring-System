@@ -979,17 +979,19 @@ def _seed_all_demo_data() -> None:
 with app.app_context():
     db.create_all()
 
-    # Auto-seed demo data if DB is empty
+    # Auto-seed demo data if DB is empty (use advisory lock to prevent race between workers)
     from app.models.user import User
-    if User.query.count() == 0:
-        print("Empty database detected — seeding comprehensive demo data...")
-        try:
+    try:
+        got_lock = db.session.execute(db.text("SELECT pg_try_advisory_lock(12345)")).scalar()
+        if got_lock and User.query.count() == 0:
+            print("Empty database detected — seeding comprehensive demo data...")
             _seed_all_demo_data()
-        except Exception as e:
-            db.session.rollback()
-            print(f"Seed error (non-fatal): {e}")
-            import traceback
-            traceback.print_exc()
+        if got_lock:
+            db.session.execute(db.text("SELECT pg_advisory_unlock(12345)"))
+            db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Seed error (non-fatal): {e}")
 
 if __name__ == "__main__":
     app.run()
