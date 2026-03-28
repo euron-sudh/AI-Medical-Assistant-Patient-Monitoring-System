@@ -36,7 +36,7 @@ function SymptomsPageContent() {
   const [selectedSpecialty, setSelectedSpecialty] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setHasApiKey(true); // API key is pre-configured loadPastSessions(); }, []);
+  useEffect(() => { setHasApiKey(true); loadPastSessions(); }, []);
 
   const specialtyParam = searchParams.get("specialty");
   const resumeParam = searchParams.get("resume");

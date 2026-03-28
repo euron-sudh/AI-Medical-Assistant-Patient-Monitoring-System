@@ -35,7 +35,7 @@ export default function AIAssistantPage() {
   const [specialty, setSpecialty] = useState("general");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setHasApiKey(true); // API key is pre-configured }, []);
+  useEffect(() => { setHasApiKey(true); }, []);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const sendMessage = async () => {
