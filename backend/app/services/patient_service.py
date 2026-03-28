@@ -629,9 +629,27 @@ class PatientService:
 
     @staticmethod
     def _to_response(profile: PatientProfile) -> PatientProfileResponse:
+        from app.models.user import User
+
+        first_name = None
+        last_name = None
+        email = None
+        try:
+            user = db.session.get(User, profile.user_id)
+            if user:
+                first_name = user.first_name
+                last_name = user.last_name
+                email = user.email
+        except Exception:
+            pass
+
         return PatientProfileResponse(
             id=str(profile.id),
             user_id=str(profile.user_id),
+            first_name=first_name,
+            last_name=last_name,
+            name=f"{first_name} {last_name}" if first_name else None,
+            email=email,
             date_of_birth=profile.date_of_birth,
             gender=profile.gender,
             blood_type=profile.blood_type,

@@ -33,45 +33,36 @@ interface Scene {
 type VoiceOption = "alloy" | "nova";
 
 /* ==========================================================================
-   TTS SERVICE -- Web Speech API (browser built-in, works immediately)
+   TTS SERVICE -- EURI API (sarvam-tts model, high-quality AI voice)
    ========================================================================== */
 
-function speakText(
+const EURI_TTS_URL = "https://api.euron.one/api/v1/euri/audio/speech";
+const EURI_API_KEY =
+  "euri-1359066cf23e5b59f64abda2da199c73046b7ba3910a018cdbdcb5ae3a13396d";
+
+async function fetchTTSAudio(
   text: string,
-  voice: VoiceOption,
-  volume: number,
-  onEnd: () => void,
-): SpeechSynthesisUtterance | null {
-  if (typeof window === "undefined" || !window.speechSynthesis) return null;
-
-  // Cancel any ongoing speech
-  window.speechSynthesis.cancel();
-
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 0.95;
-  utterance.pitch = 1.0;
-  utterance.volume = volume;
-
-  // Pick a good English voice
-  const voices = window.speechSynthesis.getVoices();
-  const preferred = voice === "nova"
-    ? voices.find((v) => v.name.includes("Female") || v.name.includes("Samantha") || v.name.includes("Google UK English Female") || v.name.includes("Microsoft Zira"))
-    : voices.find((v) => v.name.includes("Google US English") || v.name.includes("Microsoft David") || v.name.includes("Alex") || v.name.includes("Daniel"));
-  const fallback = voices.find((v) => v.lang.startsWith("en"));
-  if (preferred) utterance.voice = preferred;
-  else if (fallback) utterance.voice = fallback;
-
-  utterance.onend = onEnd;
-  utterance.onerror = onEnd;
-
-  window.speechSynthesis.speak(utterance);
-  return utterance;
-}
-
-// Preload voices (they load asynchronously in some browsers)
-if (typeof window !== "undefined" && window.speechSynthesis) {
-  window.speechSynthesis.getVoices();
-  window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
+  _voice: VoiceOption,
+): Promise<ArrayBuffer | null> {
+  try {
+    const res = await fetch(EURI_TTS_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${EURI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ model: "sarvam-tts", voice: "alloy", input: text }),
+    });
+    if (!res.ok) {
+      console.error("TTS API error:", res.status, await res.text().catch(() => ""));
+      return null;
+    }
+    const buf = await res.arrayBuffer();
+    return buf.byteLength > 0 ? buf : null;
+  } catch (err) {
+    console.error("TTS fetch failed:", err);
+    return null;
+  }
 }
 
 /* ==========================================================================
@@ -348,78 +339,86 @@ function useCountUp(target: number, durationMs: number, startDelay: number, elap
 }
 
 /* ==========================================================================
-   TTS HOOK — Web Speech API (works immediately, no external API needed)
+   TTS HOOK — EURI sarvam-tts (high-quality AI voice with pre-fetching)
    ========================================================================== */
 
 function useTTSAudio() {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const urlRef = useRef<string | null>(null);
+  const cacheRef = useRef<Map<string, ArrayBuffer>>(new Map());
+  const fallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const volumeRef = useRef(1);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
 
-  const prefetch = useCallback(async (_text: string, _voice: VoiceOption): Promise<boolean> => {
-    // Web Speech API doesn't need pre-fetching — just preload voices
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.getVoices();
-      return true;
-    }
+  const cleanup = useCallback(() => {
+    if (fallbackRef.current) { clearTimeout(fallbackRef.current); fallbackRef.current = null; }
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current.onended = null; audioRef.current = null; }
+    if (urlRef.current) { URL.revokeObjectURL(urlRef.current); urlRef.current = null; }
+  }, []);
+
+  const prefetch = useCallback(async (text: string, voice: VoiceOption): Promise<boolean> => {
+    const key = `${voice}:${text.slice(0, 50)}`;
+    if (cacheRef.current.has(key)) return true;
+    const buf = await fetchTTSAudio(text, voice);
+    if (buf) { cacheRef.current.set(key, buf); return true; }
     return false;
   }, []);
 
   const setVolume = useCallback((vol: number) => {
     volumeRef.current = Math.max(0, Math.min(1, vol));
+    if (audioRef.current) audioRef.current.volume = volumeRef.current;
   }, []);
 
-  const play = useCallback(
-    async (text: string, voice: VoiceOption, onEnd?: () => void) => {
-      if (typeof window === "undefined" || !window.speechSynthesis) {
-        setHasError(true);
-        setTimeout(() => onEnd?.(), Math.max(text.length * 65, 4000));
-        return;
-      }
-
-      setHasError(false);
-      setIsLoading(false);
-      setIsSpeaking(true);
-
-      speakText(text, voice, volumeRef.current, () => {
-        setIsSpeaking(false);
-        onEnd?.();
-      });
-    },
-    []
-  );
-
-  const pause = useCallback(() => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.pause();
-    }
-    setIsSpeaking(false);
-  }, []);
-
-  const resume = useCallback(() => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.resume();
-      setIsSpeaking(true);
-    }
-  }, []);
-
-  const stop = useCallback(() => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
-    setIsSpeaking(false);
-    setIsLoading(false);
+  const play = useCallback(async (text: string, voice: VoiceOption, onEnd?: () => void) => {
+    cleanup();
     setHasError(false);
-  }, []);
+    setIsLoading(true);
+    setIsSpeaking(false);
 
-  useEffect(() => {
-    return () => {
-      if (typeof window !== "undefined" && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
+    const key = `${voice}:${text.slice(0, 50)}`;
+    let buf = cacheRef.current.get(key) ?? null;
+    if (!buf) buf = await fetchTTSAudio(text, voice);
+    if (buf) cacheRef.current.set(key, buf);
+
+    if (!buf) {
+      setIsLoading(false); setHasError(true);
+      fallbackRef.current = setTimeout(() => { setHasError(false); onEnd?.(); }, Math.max(text.length * 60, 5000));
+      return;
+    }
+
+    setIsLoading(false);
+    // sarvam-tts returns WAV audio
+    const blob = new Blob([buf], { type: "audio/wav" });
+    const url = URL.createObjectURL(blob);
+    urlRef.current = url;
+
+    const audio = new Audio(url);
+    audio.volume = volumeRef.current;
+    audioRef.current = audio;
+    audio.onended = () => { setIsSpeaking(false); onEnd?.(); };
+    audio.onerror = () => {
+      setIsSpeaking(false); setHasError(true);
+      fallbackRef.current = setTimeout(() => { setHasError(false); onEnd?.(); }, Math.max(text.length * 60, 5000));
     };
+
+    try { await audio.play(); setIsSpeaking(true); }
+    catch {
+      setIsSpeaking(false); setHasError(true);
+      fallbackRef.current = setTimeout(() => { setHasError(false); onEnd?.(); }, Math.max(text.length * 60, 5000));
+    }
+  }, [cleanup]);
+
+  const pause = useCallback(() => { cleanup(); setIsSpeaking(false); }, [cleanup]);
+  const resume = useCallback(() => {
+    if (audioRef.current && !audioRef.current.ended) {
+      audioRef.current.play().then(() => setIsSpeaking(true)).catch(() => {});
+    }
   }, []);
+  const stop = useCallback(() => { cleanup(); setIsSpeaking(false); setIsLoading(false); setHasError(false); }, [cleanup]);
+
+  useEffect(() => () => { cleanup(); }, [cleanup]);
 
   return { play, pause, resume, stop, prefetch, setVolume, isSpeaking, isLoading, hasError };
 }
