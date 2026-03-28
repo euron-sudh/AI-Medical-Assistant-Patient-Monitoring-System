@@ -148,9 +148,16 @@ export default function PatientsPage() {
                   <span className="text-muted-foreground">
                     {p.assigned_doctor_name ?? "Unassigned"}
                   </span>
-                  <span className="text-right">
-                    <button className="text-xs font-medium text-primary hover:underline">
-                      {expandedId === p.id ? "Collapse" : "Details"}
+                  <span className="flex items-center justify-end gap-2">
+                    <a
+                      href={`/doctor/patients/${p.user_id ?? p.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-xs font-medium text-primary hover:underline"
+                    >
+                      View
+                    </a>
+                    <button className="text-xs font-medium text-muted-foreground hover:text-foreground">
+                      {expandedId === p.id ? "Collapse" : "Expand"}
                     </button>
                   </span>
                 </div>

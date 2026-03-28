@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import apiClient from "@/lib/api-client";
-import { RefreshCw, Users, BarChart3, Gauge } from "lucide-react";
+// Icons available for future use: RefreshCw, Users, BarChart3, Gauge from "lucide-react"
 export default function PlatformMetricsPage() {
   const [totalUsers, setTotalUsers] = useState(0);
   const [roleCounts, setRoleCounts] = useState<{role:string;count:number;percentage:number}[]>([{role:"Patients",count:20,percentage:50},{role:"Doctors",count:10,percentage:25},{role:"Nurses",count:5,percentage:13},{role:"Admins",count:3,percentage:8}]);
@@ -40,7 +40,7 @@ export default function PlatformMetricsPage() {
         </div>
         <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
           <h4 className="text-sm font-medium text-muted-foreground">Total Users</h4>
-          <p className="mt-2 text-3xl font-bold text-foreground">{totalUsers || 40}</p>
+          <p className="mt-2 text-3xl font-bold text-foreground">{totalUsers}</p>
           <p className="mt-1 text-xs text-muted-foreground">Registered accounts</p>
         </div>
       </div>

@@ -24,7 +24,7 @@ const apiClient = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  timeout: 15000,
+  timeout: 30000,
 });
 
 apiClient.interceptors.request.use((config) => {
@@ -60,9 +60,10 @@ apiClient.interceptors.response.use(
           refreshToken,
         });
 
-        localStorage.setItem("accessToken", data.accessToken);
+        const newToken = data.access_token ?? data.accessToken;
+        localStorage.setItem("accessToken", newToken);
 
-        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return apiClient(originalRequest);
       } catch {
         localStorage.removeItem("accessToken");

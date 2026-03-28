@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import apiClient from "@/lib/api-client";
-import { Settings as SettingsIcon, Shield, ToggleLeft, CheckCircle2, Server, RefreshCw } from "lucide-react";
+// lucide-react icons available if needed
 
 export default function SettingsPage() {
   const [currentUser, setCurrentUser] = useState<{ first_name?: string; last_name?: string; role?: string; email?: string } | null>(null);

@@ -14,6 +14,7 @@ const navItems = [
   { href: "/admin/ai-config", label: "AI Configuration", icon: "AI" },
   { href: "/admin/audit-logs", label: "Audit Logs", icon: "AL" },
   { href: "/admin/ai-analytics", label: "AI Analytics", icon: "An" },
+  { href: "/admin/platform-metrics", label: "Platform Metrics", icon: "PM" },
   { href: "/admin/alerts", label: "Alert Summary", icon: "As" },
   { href: "/admin/settings", label: "Settings", icon: "S" },
 ];

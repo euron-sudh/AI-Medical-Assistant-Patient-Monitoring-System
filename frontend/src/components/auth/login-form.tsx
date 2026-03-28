@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loginSchema, type LoginFormData } from "@/lib/validators";
 import apiClient from "@/lib/api-client";
-import type { LoginResponse, AuthError } from "@/types/auth";
+import type { LoginResponse } from "@/types/auth";
 import { GoogleSignIn } from "./google-sign-in";
 
 export function LoginForm() {
@@ -60,8 +60,9 @@ export function LoginForm() {
         typeof error.response === "object" &&
         "data" in error.response
       ) {
-        const authError = (error.response as { data: AuthError }).data;
-        setServerError(authError.message ?? "Login failed. Please try again.");
+        const responseData = (error.response as { data: Record<string, unknown> }).data;
+        const msg = (responseData?.error as Record<string, unknown>)?.message ?? responseData?.message ?? "Login failed. Please try again.";
+        setServerError(String(msg));
       } else {
         setServerError("An unexpected error occurred. Please try again.");
       }

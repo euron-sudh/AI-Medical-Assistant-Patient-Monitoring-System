@@ -4,6 +4,32 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Mic, MicOff, Send, Loader2, Volume2, Square } from "lucide-react";
 import apiClient from "@/lib/api-client";
 
+/* Web Speech API type declarations for browsers that support it */
+interface SpeechRecognitionEvent extends Event {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message: string;
+}
+interface SpeechRecognitionInstance extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => SpeechRecognitionInstance;
+    webkitSpeechRecognition?: new () => SpeechRecognitionInstance;
+  }
+}
+
 interface TranscriptMessage {
   id: string;
   role: "user" | "assistant";
@@ -18,7 +44,7 @@ export default function VoiceRecorder() {
   const [messages, setMessages] = useState<TranscriptMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(true);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

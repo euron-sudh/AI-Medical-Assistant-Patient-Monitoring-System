@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   nginx:
     image: nginx:alpine
@@ -13,6 +11,9 @@ services:
       frontend:
         condition: service_started
     restart: always
+    # Use Docker DNS so nginx resolves container names dynamically
+    networks:
+      - default
 
   backend:
     image: ${REGISTRY_URL:-medassist}/backend:${IMAGE_TAG:-latest}

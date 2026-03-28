@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import apiClient from "@/lib/api-client";
-import { RefreshCw, Server, Database, Cpu, HardDrive, Wifi, CheckCircle2, XCircle, Clock as ClockIcon } from "lucide-react";
+// lucide-react icons available if needed
 
 interface HealthData {
   status: string;

@@ -53,7 +53,7 @@ export default function TelemedicinePage() {
     setJoiningId(session.id);
     setCallStatus("joining");
     try {
-      const res = await apiClient.post(`/telemedicine/sessions/${session.id}/join`);
+      const res = await apiClient.post(`/telemedicine/session/${session.id}/join`);
       setActiveCall({ ...session, daily_room_url: res.data.room_url ?? session.daily_room_url, daily_token: res.data.token ?? session.daily_token });
       setCallStatus("connected");
     } catch {

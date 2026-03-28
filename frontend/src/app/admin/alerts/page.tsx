@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import apiClient from "@/lib/api-client";
-import { Bell, AlertTriangle as AlertIcon, CheckCircle2, Clock, RefreshCw } from "lucide-react";
+// lucide-react icons available if needed
 
 interface Alert {
   id: string;

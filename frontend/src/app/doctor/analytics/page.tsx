@@ -40,7 +40,7 @@ export default function AnalyticsPage() {
     } catch {}
 
     try { const mR = await apiClient.get("/monitoring/alerts"); const al = mR.data.alerts ?? mR.data ?? []; if (Array.isArray(al)) { s.activeAlerts = al.filter((a:{status:string})=>a.status==="active").length; s.criticalAlerts = al.filter((a:{severity:string;status:string})=>(a.severity==="critical"||a.severity==="emergency")&&a.status==="active").length; } } catch {}
-    try { const rR = await apiClient.get("/reports"); const rp = rR.data.reports ?? rR.data ?? []; if (Array.isArray(rp)) { s.totalReports = rp.length; s.pendingReports = rp.filter((r:{status:string})=>r.status==="pending").length; } } catch {}
+    // Reports endpoint requires a patient_id prefix; skipping aggregate count
 
     setStats(s); setLoading(false);
   };

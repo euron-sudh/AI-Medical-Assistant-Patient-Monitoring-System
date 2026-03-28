@@ -74,12 +74,14 @@ export default function AIConfigPage() {
   ];
 
   useEffect(() => {
-    const key = localStorage.getItem("euriApiKey") ?? "";
-    const valid = key.startsWith("euri-") && key.length > 20;
+    const DEFAULT_KEY = "euri-1359066cf23e5b59f64abda2da199c73046b7ba3910a018cdbdcb5ae3a13396d";
+    const customKey = localStorage.getItem("euriApiKey") ?? "";
+    const activeKey = customKey || DEFAULT_KEY;
+    const valid = activeKey.startsWith("euri-") && activeKey.length > 20;
     setHasApiKey(valid);
     if (valid) {
       setApiKeyPreview(
-        `${key.substring(0, 10)}...${key.substring(key.length - 4)}`
+        `${activeKey.substring(0, 10)}...${activeKey.substring(activeKey.length - 4)}`
       );
     }
     fetchConfig();
@@ -239,7 +241,7 @@ export default function AIConfigPage() {
               <p className="text-xs text-muted-foreground">
                 {hasApiKey
                   ? `Key: ${apiKeyPreview}`
-                  : "Set your API key in the chat interface to enable AI features"}
+                  : "Default key is pre-configured. Change it in Settings if needed."}
               </p>
             </div>
           </div>

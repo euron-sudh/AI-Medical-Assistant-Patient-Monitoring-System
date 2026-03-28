@@ -110,7 +110,6 @@ function SymptomsPageContent() {
     } catch (err: unknown) {
       const msg = extractErrorMessage(err, "Failed to start symptom session.");
       setError(msg);
-      if (msg.includes("API key") || msg.includes("Invalid")) setShowKeyModal(true);
     } finally { setIsLoading(false); }
   };
 
@@ -181,7 +180,6 @@ function SymptomsPageContent() {
             )}
             <p className="mt-4 text-sm text-muted-foreground">Start a new symptom check session. Our AI assistant will guide you through questions to help identify possible conditions.</p>
             <button onClick={startSession} disabled={isLoading} className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{isLoading ? "Starting..." : "Start New Check"}</button>
-            {!hasApiKey && <p className="mt-2 text-xs text-amber-600">Set your EURI API key first to use AI features.</p>}
           </div>
           <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
             <div className="flex items-center gap-3">
@@ -285,7 +283,7 @@ function SymptomsPageContent() {
         <p className="text-xs text-muted-foreground">AI-generated symptom analysis is for informational purposes only and is not a substitute for professional medical advice. If you are experiencing a medical emergency, call 911 immediately.</p>
       </div>
 
-      <ApiKeyModal isOpen={showKeyModal} onClose={() => setShowKeyModal(false)} onSave={(key) => setHasApiKey(!!key && key.startsWith("euri-"))} />
+      <ApiKeyModal isOpen={showKeyModal} onClose={() => setShowKeyModal(false)} onSave={() => setHasApiKey(true)} />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import apiClient from "@/lib/api-client";
-import { Download, Search, RefreshCw, Filter, ShieldCheck, AlertTriangle, FileText, Calendar } from "lucide-react";
+import { Download } from "lucide-react";
 
 interface AuditLog {
   id: string;
@@ -50,6 +50,10 @@ export default function AuditLogsPage() {
   const [usingSample, setUsingSample] = useState(false);
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const logsPerPage = 20;
 
   useEffect(() => {
     fetchLogs();
@@ -78,6 +82,16 @@ export default function AuditLogsPage() {
 
   const filtered = logs.filter((log) => {
     if (actionFilter !== "all" && log.action !== actionFilter) return false;
+    if (dateFrom) {
+      const logDate = new Date(log.created_at);
+      const fromDate = new Date(dateFrom);
+      if (logDate < fromDate) return false;
+    }
+    if (dateTo) {
+      const logDate = new Date(log.created_at);
+      const toDate = new Date(dateTo + "T23:59:59");
+      if (logDate > toDate) return false;
+    }
     if (search) {
       const q = search.toLowerCase();
       return (
@@ -99,6 +113,9 @@ export default function AuditLogsPage() {
     const now = new Date();
     return d.toDateString() === now.toDateString();
   }).length;
+
+  const totalPages = Math.ceil(filtered.length / logsPerPage);
+  const paginatedLogs = filtered.slice((currentPage - 1) * logsPerPage, currentPage * logsPerPage);
 
   const getActionStyle = (action: string): string => {
     for (const [key, style] of Object.entries(ACTION_STYLES)) {
@@ -165,6 +182,32 @@ export default function AuditLogsPage() {
           <option value="login">Login</option>
           <option value="export">Export</option>
         </select>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-muted-foreground">From:</label>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-muted-foreground">To:</label>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        {(dateFrom || dateTo) && (
+          <button
+            onClick={() => { setDateFrom(""); setDateTo(""); }}
+            className="text-xs text-primary hover:underline"
+          >
+            Clear dates
+          </button>
+        )}
       </div>
 
       {loading && (
@@ -186,13 +229,13 @@ export default function AuditLogsPage() {
               <span>Status</span>
             </div>
           </div>
-          {filtered.length === 0 ? (
+          {paginatedLogs.length === 0 ? (
             <div className="px-6 py-8 text-center text-sm text-muted-foreground">
               No audit log entries match your criteria.
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {filtered.map((log) => (
+              {paginatedLogs.map((log) => (
                 <div
                   key={log.id}
                   className={`grid grid-cols-6 items-center px-6 py-3 text-sm transition-colors hover:bg-muted/50 ${
@@ -236,6 +279,33 @@ export default function AuditLogsPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">
+            Showing {(currentPage - 1) * logsPerPage + 1} to {Math.min(currentPage * logsPerPage, filtered.length)} of {filtered.length} entries
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="rounded-md border border-input px-3 py-1 text-sm hover:bg-muted disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="rounded-md border border-input px-3 py-1 text-sm hover:bg-muted disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
 

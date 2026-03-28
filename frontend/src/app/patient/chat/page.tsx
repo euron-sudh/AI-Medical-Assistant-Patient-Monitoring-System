@@ -29,8 +29,6 @@ export default function ChatPage() {
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
-    const euriKey = ""; // Backend uses its own key
-
     const userMessage: Message = { role: "user", content: input.trim() };
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
@@ -38,16 +36,10 @@ export default function ChatPage() {
     setError(null);
 
     try {
-      const response = await apiClient.post(
-        "/chat/message",
-        {
-          message: userMessage.content,
-          history: messages.slice(-10),
-        },
-        {
-          headers: { "X-Euri-Api-Key": euriKey },
-        }
-      );
+      const response = await apiClient.post("/chat/message", {
+        message: userMessage.content,
+        history: messages.slice(-10),
+      });
 
       const aiMessage: Message = {
         role: "assistant",
@@ -65,11 +57,8 @@ export default function ChatPage() {
           ? (err.response as { data: { error?: { message?: string } } }).data
           : null;
       const msg =
-        errData?.error?.message ?? "Failed to get AI response. Check your API key.";
+        errData?.error?.message ?? "Failed to get AI response. Please try again.";
       setError(msg);
-      if (msg.includes("API key") || msg.includes("Invalid")) {
-        setShowKeyModal(true);
-      }
     } finally {
       setIsLoading(false);
     }
@@ -117,14 +106,6 @@ export default function ChatPage() {
               Ask me about symptoms, medications, lab results, or general health
               questions. I&apos;m here to help.
             </p>
-            {!hasApiKey && (
-              <button
-                onClick={() => setShowKeyModal(true)}
-                className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                Set EURI API Key to Start
-              </button>
-            )}
             <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {[
                 "What are the symptoms of diabetes?",
@@ -136,6 +117,23 @@ export default function ChatPage() {
                   key={q}
                   onClick={() => {
                     setInput(q);
+                    setTimeout(() => {
+                      const userMessage: Message = { role: "user", content: q };
+                      setMessages((prev) => [...prev, userMessage]);
+                      setInput("");
+                      setIsLoading(true);
+                      setError(null);
+                      apiClient.post("/chat/message", {
+                        message: q,
+                        history: [],
+                      }).then((response) => {
+                        setMessages((prev) => [...prev, { role: "assistant", content: response.data.response }]);
+                      }).catch(() => {
+                        setError("Failed to get AI response. Please try again.");
+                      }).finally(() => {
+                        setIsLoading(false);
+                      });
+                    }, 0);
                   }}
                   className="rounded-md border border-border px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted"
                 >
@@ -191,13 +189,13 @@ export default function ChatPage() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={hasApiKey ? "Type your health question..." : "Set API key first..."}
-          disabled={!hasApiKey || isLoading}
+          placeholder="Type your health question..."
+          disabled={isLoading}
           className="flex-1 rounded-md border border-input bg-background px-4 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
         />
         <button
           onClick={sendMessage}
-          disabled={!input.trim() || isLoading || !hasApiKey}
+          disabled={!input.trim() || isLoading}
           className="rounded-md bg-primary px-6 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
           Send
@@ -214,7 +212,7 @@ export default function ChatPage() {
       <ApiKeyModal
         isOpen={showKeyModal}
         onClose={() => setShowKeyModal(false)}
-        onSave={(key) => setHasApiKey(!!key && key.startsWith("euri-"))}
+        onSave={() => setHasApiKey(true)}
       />
     </div>
   );

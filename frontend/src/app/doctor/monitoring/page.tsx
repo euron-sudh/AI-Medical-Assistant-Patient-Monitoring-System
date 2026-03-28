@@ -78,6 +78,11 @@ export default function MonitoringPage() {
 
   useEffect(() => {
     fetchAlerts();
+    // Auto-refresh alerts every 30 seconds for real-time monitoring
+    const interval = setInterval(() => {
+      fetchAlerts();
+    }, 30000);
+    return () => clearInterval(interval);
   }, [fetchAlerts]);
 
   const handleAcknowledge = async (alertId: string) => {

@@ -2,12 +2,6 @@
 
 import { useEffect, useState } from "react";
 import apiClient from "@/lib/api-client";
-import MedicationSchedule from "@/components/medications/MedicationSchedule";
-import InteractionChecker from "@/components/medications/InteractionChecker";
-import AdherenceTracker from "@/components/medications/AdherenceTracker";
-import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import EmptyState from "@/components/shared/EmptyState";
-import StatusBadge from "@/components/shared/StatusBadge";
 
 interface Medication {
   id: string;

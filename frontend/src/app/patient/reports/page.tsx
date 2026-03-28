@@ -2,12 +2,6 @@
 
 import { useEffect, useState } from "react";
 import apiClient from "@/lib/api-client";
-import ReportUploader from "@/components/reports/ReportUploader";
-import LabValueTable, { LabValue } from "@/components/reports/LabValueTable";
-import AISummaryDisplay from "@/components/reports/AISummaryDisplay";
-import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import EmptyState from "@/components/shared/EmptyState";
-import StatusBadge from "@/components/shared/StatusBadge";
 
 interface MedicalReport {
   id: string;

@@ -83,12 +83,16 @@ jobs:
           gcloud compute scp docker-compose.prod.yml ${VM_NAME}:/tmp/medassist-deploy/docker-compose.prod.yml \
             --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
 
+          gcloud compute scp .env.prod ${VM_NAME}:/tmp/medassist-deploy/.env.prod \
+            --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
+
           gcloud compute scp --recurse nginx ${VM_NAME}:/tmp/medassist-deploy/ \
             --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID}
 
           # Move files into place and restart with sudo
           gcloud compute ssh ${VM_NAME} --zone=${GCP_ZONE} --project=${GCP_PROJECT_ID} --command="
             sudo cp /tmp/medassist-deploy/docker-compose.prod.yml /opt/medassist/docker-compose.prod.yml
+            sudo cp /tmp/medassist-deploy/.env.prod /opt/medassist/.env.prod
             sudo cp -r /tmp/medassist-deploy/nginx/* /opt/medassist/nginx/
             rm -rf /tmp/medassist-deploy
             cd /opt/medassist
@@ -101,14 +105,23 @@ jobs:
             export IMAGE_TAG='${IMAGE_TAG}'
 
             # Pull and restart
-            sudo docker compose -f docker-compose.prod.yml pull
-            sudo docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            sudo -E docker compose -f docker-compose.prod.yml pull
+            sudo -E docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Wait for services to stabilize
+            sleep 10
 
             # Cleanup
             sudo docker image prune -f
 
             echo 'Deployment complete!'
             sudo docker compose -f docker-compose.prod.yml ps
+
+            # Show recent logs for debugging
+            echo '--- Backend logs (last 30 lines) ---'
+            sudo docker compose -f docker-compose.prod.yml logs --tail=30 backend 2>&1 || true
+            echo '--- Frontend logs (last 15 lines) ---'
+            sudo docker compose -f docker-compose.prod.yml logs --tail=15 frontend 2>&1 || true
           "
 
       # Health check

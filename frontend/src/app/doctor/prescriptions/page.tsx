@@ -60,20 +60,20 @@ export default function PrescriptionsPage() {
   const fetchMedications = async () => {
     try {
       setLoading(true);
-      const r = await apiClient.get("/medications");
-      const d = r.data.medications ?? r.data ?? [];
-      setMedications(Array.isArray(d) ? d : []);
+      const pR = await apiClient.get("/patients");
+      const pl = pR.data.patients ?? pR.data ?? [];
+      const all: Medication[] = [];
+      for (const p of (Array.isArray(pl) ? pl.slice(0, 20) : [])) {
+        try {
+          const mR = await apiClient.get(`/medications/${p.user_id ?? p.id}`);
+          const ms = mR.data.medications ?? mR.data ?? [];
+          if (Array.isArray(ms)) all.push(...ms.map((m: Medication) => ({ ...m, patient_name: m.patient_name ?? `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim(), patient_id: m.patient_id ?? p.user_id ?? p.id })));
+        } catch { /* patient may have no medications */ }
+      }
+      setMedications(all);
       setError(null);
     } catch {
-      try {
-        const pR = await apiClient.get("/patients");
-        const pl = pR.data.patients ?? pR.data ?? [];
-        const all: Medication[] = [];
-        for (const p of (Array.isArray(pl) ? pl.slice(0,10) : [])) {
-          try { const mR = await apiClient.get(`/medications/${p.user_id ?? p.id}`); const ms = mR.data.medications ?? mR.data ?? []; if (Array.isArray(ms)) all.push(...ms.map((m: Medication) => ({ ...m, patient_name: m.patient_name ?? `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() }))); } catch {}
-        }
-        setMedications(all); setError(null);
-      } catch { setError("Failed to load prescriptions."); }
+      setError("Failed to load prescriptions.");
     } finally { setLoading(false); }
   };
 

@@ -70,7 +70,7 @@ def send_message():
                 return jsonify({
                     "error": {
                         "code": "NO_API_KEY",
-                        "message": "No EURI API key configured. Click 'Set API Key' to add yours.",
+                        "message": "No EURI API key configured on the server. Check backend .env file.",
                     }
                 }), 400
 

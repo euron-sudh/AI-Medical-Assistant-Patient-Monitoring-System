@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import apiClient from "@/lib/api-client";
-import { Users as UsersIcon, Search, RefreshCw, Eye, UserCheck, UserX } from "lucide-react";
+// lucide-react icons available if needed
 
 interface User {
   id: string;
@@ -210,9 +210,10 @@ export default function UsersPage() {
           </div>
           <div className="divide-y divide-border">
             {filtered.map((u) => (
-              <div
+              <Link
                 key={u.id}
-                className="grid grid-cols-6 items-center px-6 py-3 text-sm transition-colors hover:bg-muted/50"
+                href={`/admin/users/${u.id}`}
+                className="grid grid-cols-6 items-center px-6 py-3 text-sm transition-colors hover:bg-muted/50 cursor-pointer"
               >
                 <span className="font-medium text-foreground">
                   {u.first_name} {u.last_name}
@@ -246,7 +247,7 @@ export default function UsersPage() {
                     ? new Date(u.created_at).toLocaleDateString()
                     : "N/A"}
                 </span>
-              </div>
+              </Link>
             ))}
           </div>
         </div>

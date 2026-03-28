@@ -142,8 +142,8 @@ export default function VitalsPage() {
 
   const tempClass = (v: number | null) => {
     if (v == null) return "";
-    if (v > 37.5) return "text-amber-600 font-semibold";
     if (v > 38.5) return "text-red-600 font-semibold";
+    if (v > 37.5) return "text-amber-600 font-semibold";
     return "text-foreground";
   };
 

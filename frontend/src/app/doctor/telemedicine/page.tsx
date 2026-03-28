@@ -62,7 +62,7 @@ export default function TelemedicinePage() {
     try {
       // Request a Daily.co room token from the backend
       const res = await apiClient.post(
-        `/telemedicine/sessions/${session.id}/join`
+        `/telemedicine/session/${session.id}/join`
       );
       const roomUrl = res.data.room_url ?? session.daily_room_url ?? null;
       const token = res.data.token ?? session.daily_token ?? null;

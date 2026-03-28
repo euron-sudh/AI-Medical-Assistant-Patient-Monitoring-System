@@ -126,15 +126,8 @@ export default function DoctorDashboard() {
       /* ignore */
     }
 
-    try {
-      const rRes = await apiClient.get("/reports");
-      const reports = rRes.data.reports ?? rRes.data ?? [];
-      if (Array.isArray(reports)) {
-        setPendingReports(reports.filter((r: { status: string }) => r.status === "pending").length);
-      }
-    } catch {
-      /* ignore */
-    }
+    // Reports endpoint requires a patient_id; pending count comes from per-patient data
+    // For dashboard overview, we skip this to avoid unnecessary 404 calls
 
     setLoading(false);
   };

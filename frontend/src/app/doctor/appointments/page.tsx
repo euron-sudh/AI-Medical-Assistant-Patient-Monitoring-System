@@ -94,7 +94,7 @@ export default function DoctorAppointmentsPage() {
   const handleConfirm = async (id: string) => {
     setActionLoading(id);
     try {
-      await apiClient.patch(`/appointments/${id}`, { status: "confirmed" });
+      await apiClient.put(`/appointments/${id}/confirm`, {});
       setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status: "confirmed" } : a)));
     } catch { alert("Failed to confirm appointment."); }
     finally { setActionLoading(null); }
@@ -104,7 +104,7 @@ export default function DoctorAppointmentsPage() {
     if (!confirm("Cancel this appointment?")) return;
     setActionLoading(id);
     try {
-      await apiClient.patch(`/appointments/${id}`, { status: "cancelled" });
+      await apiClient.put(`/appointments/${id}/cancel`, { reason: "Cancelled by doctor" });
       setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status: "cancelled" } : a)));
     } catch { alert("Failed to cancel appointment."); }
     finally { setActionLoading(null); }

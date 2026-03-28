@@ -6,14 +6,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { registerSchema, type RegisterFormData } from "@/lib/validators";
 import apiClient from "@/lib/api-client";
-import type { RegisterResponse, AuthError, UserRole } from "@/types/auth";
+import type { RegisterResponse, UserRole } from "@/types/auth";
 import { GoogleSignIn } from "./google-sign-in";
 
-const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
-  { value: "patient", label: "Patient" },
-  { value: "doctor", label: "Doctor" },
-  { value: "nurse", label: "Nurse" },
-  { value: "admin", label: "Administrator" },
+const ROLE_OPTIONS: { value: UserRole; label: string; selfRegister: boolean }[] = [
+  { value: "patient", label: "Patient", selfRegister: true },
+  { value: "doctor", label: "Doctor", selfRegister: false },
+  { value: "nurse", label: "Nurse", selfRegister: false },
+  { value: "admin", label: "Administrator", selfRegister: false },
 ];
 
 export function RegisterForm() {
@@ -54,10 +54,9 @@ export function RegisterForm() {
         typeof error.response === "object" &&
         "data" in error.response
       ) {
-        const authError = (error.response as { data: AuthError }).data;
-        setServerError(
-          authError.message ?? "Registration failed. Please try again."
-        );
+        const responseData = (error.response as { data: Record<string, unknown> }).data;
+        const msg = (responseData?.error as Record<string, unknown>)?.message ?? responseData?.message ?? "Registration failed. Please try again.";
+        setServerError(String(msg));
       } else {
         setServerError("An unexpected error occurred. Please try again.");
       }
@@ -172,11 +171,14 @@ export function RegisterForm() {
           {...register("role")}
         >
           {ROLE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
+            <option key={option.value} value={option.value} disabled={!option.selfRegister}>
+              {option.label}{!option.selfRegister ? " (admin-created only)" : ""}
             </option>
           ))}
         </select>
+        <p className="text-xs text-muted-foreground">
+          Only patient accounts can self-register. Doctor, nurse, and admin accounts must be created by an administrator.
+        </p>
         {errors.role && (
           <p className="text-sm text-destructive">{errors.role.message}</p>
         )}

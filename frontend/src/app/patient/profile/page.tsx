@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import { ApiKeyButton } from "@/components/shared/api-key-modal";
 import apiClient from "@/lib/api-client";
-import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import ConfirmDialog from "@/components/shared/ConfirmDialog";
 
 interface UserProfile {
   id: string;
@@ -63,11 +61,11 @@ export default function ProfilePage() {
   const checkApiKey = () => {
     const key = localStorage.getItem("euriApiKey");
     if (key && key.startsWith("euri-") && key.length > 20) {
-      setApiKeyStatus("Configured (key set)");
+      setApiKeyStatus("Configured (custom key)");
     } else if (key) {
       setApiKeyStatus("Set but may be invalid");
     } else {
-      setApiKeyStatus("Not configured");
+      setApiKeyStatus("Configured (server default)");
     }
   };
 
