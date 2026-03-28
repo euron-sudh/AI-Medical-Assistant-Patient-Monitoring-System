@@ -33,40 +33,45 @@ interface Scene {
 type VoiceOption = "alloy" | "nova";
 
 /* ==========================================================================
-   TTS SERVICE -- EURI API (OpenAI-compatible)
+   TTS SERVICE -- Web Speech API (browser built-in, works immediately)
    ========================================================================== */
 
-const EURI_TTS_URL = "https://api.euron.one/api/v1/euri/audio/speech";
-const EURI_API_KEY =
-  "euri-1359066cf23e5b59f64abda2da199c73046b7ba3910a018cdbdcb5ae3a13396d";
-
-async function fetchTTSAudio(
+function speakText(
   text: string,
-  voice: VoiceOption
-): Promise<ArrayBuffer | null> {
-  try {
-    const res = await fetch(EURI_TTS_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${EURI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ model: "tts-1", voice, input: text }),
-    });
-    if (!res.ok) {
-      console.error(`TTS API error: ${res.status} ${res.statusText}`);
-      return null;
-    }
-    const buf = await res.arrayBuffer();
-    if (buf.byteLength === 0) {
-      console.error("TTS API returned empty audio buffer");
-      return null;
-    }
-    return buf;
-  } catch (err) {
-    console.error("TTS API fetch failed:", err);
-    return null;
-  }
+  voice: VoiceOption,
+  volume: number,
+  onEnd: () => void,
+): SpeechSynthesisUtterance | null {
+  if (typeof window === "undefined" || !window.speechSynthesis) return null;
+
+  // Cancel any ongoing speech
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 0.95;
+  utterance.pitch = 1.0;
+  utterance.volume = volume;
+
+  // Pick a good English voice
+  const voices = window.speechSynthesis.getVoices();
+  const preferred = voice === "nova"
+    ? voices.find((v) => v.name.includes("Female") || v.name.includes("Samantha") || v.name.includes("Google UK English Female") || v.name.includes("Microsoft Zira"))
+    : voices.find((v) => v.name.includes("Google US English") || v.name.includes("Microsoft David") || v.name.includes("Alex") || v.name.includes("Daniel"));
+  const fallback = voices.find((v) => v.lang.startsWith("en"));
+  if (preferred) utterance.voice = preferred;
+  else if (fallback) utterance.voice = fallback;
+
+  utterance.onend = onEnd;
+  utterance.onerror = onEnd;
+
+  window.speechSynthesis.speak(utterance);
+  return utterance;
+}
+
+// Preload voices (they load asynchronously in some browsers)
+if (typeof window !== "undefined" && window.speechSynthesis) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
 }
 
 /* ==========================================================================
@@ -343,32 +348,19 @@ function useCountUp(target: number, durationMs: number, startDelay: number, elap
 }
 
 /* ==========================================================================
-   TTS AUDIO HOOK (with pre-fetch, volume, loading, error state)
+   TTS HOOK — Web Speech API (works immediately, no external API needed)
    ========================================================================== */
 
 function useTTSAudio() {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const objectUrlRef = useRef<string | null>(null);
-  const cacheRef = useRef<Map<string, ArrayBuffer>>(new Map());
-  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const volumeRef = useRef(1);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
 
-  const clearFallbackTimer = useCallback(() => {
-    if (fallbackTimerRef.current) {
-      clearTimeout(fallbackTimerRef.current);
-      fallbackTimerRef.current = null;
-    }
-  }, []);
-
-  const prefetch = useCallback(async (text: string, voice: VoiceOption): Promise<boolean> => {
-    const key = `${voice}:${text.slice(0, 60)}`;
-    if (cacheRef.current.has(key)) return true;
-    const buf = await fetchTTSAudio(text, voice);
-    if (buf) {
-      cacheRef.current.set(key, buf);
+  const prefetch = useCallback(async (_text: string, _voice: VoiceOption): Promise<boolean> => {
+    // Web Speech API doesn't need pre-fetching — just preload voices
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.getVoices();
       return true;
     }
     return false;
@@ -376,145 +368,58 @@ function useTTSAudio() {
 
   const setVolume = useCallback((vol: number) => {
     volumeRef.current = Math.max(0, Math.min(1, vol));
-    if (audioRef.current) {
-      audioRef.current.volume = volumeRef.current;
-    }
   }, []);
 
   const play = useCallback(
     async (text: string, voice: VoiceOption, onEnd?: () => void) => {
-      // Stop any current playback
-      clearFallbackTimer();
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.onended = null;
-        audioRef.current.onerror = null;
-        audioRef.current = null;
-      }
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-        objectUrlRef.current = null;
-      }
-
-      setHasError(false);
-      setIsLoading(true);
-      setIsSpeaking(false);
-
-      const key = `${voice}:${text.slice(0, 60)}`;
-      let buffer = cacheRef.current.get(key) ?? null;
-      if (!buffer) {
-        buffer = await fetchTTSAudio(text, voice);
-        if (buffer) {
-          cacheRef.current.set(key, buffer);
-        }
-      }
-
-      // TTS fetch failed -- show error, use timer fallback for scene advancement
-      if (!buffer) {
-        setIsLoading(false);
+      if (typeof window === "undefined" || !window.speechSynthesis) {
         setHasError(true);
-        setIsSpeaking(false);
-        const fallbackMs = Math.max(text.length * 65, 4000);
-        fallbackTimerRef.current = setTimeout(() => {
-          setHasError(false);
-          onEnd?.();
-        }, fallbackMs);
+        setTimeout(() => onEnd?.(), Math.max(text.length * 65, 4000));
         return;
       }
 
+      setHasError(false);
       setIsLoading(false);
+      setIsSpeaking(true);
 
-      const blob = new Blob([buffer], { type: "audio/mpeg" });
-      const url = URL.createObjectURL(blob);
-      objectUrlRef.current = url;
-
-      const audio = new Audio(url);
-      audio.volume = volumeRef.current;
-      audio.preload = "auto";
-      audioRef.current = audio;
-
-      audio.onended = () => {
+      speakText(text, voice, volumeRef.current, () => {
         setIsSpeaking(false);
         onEnd?.();
-      };
-
-      audio.onerror = () => {
-        console.error("Audio playback error");
-        setIsSpeaking(false);
-        setHasError(true);
-        // Fall back to timer-based advancement
-        const fallbackMs = Math.max(text.length * 65, 4000);
-        fallbackTimerRef.current = setTimeout(() => {
-          setHasError(false);
-          onEnd?.();
-        }, fallbackMs);
-      };
-
-      try {
-        await audio.play();
-        setIsSpeaking(true);
-      } catch (playErr) {
-        console.error("Audio play() rejected:", playErr);
-        setIsSpeaking(false);
-        setHasError(true);
-        // Timer fallback for auto-advance
-        const fallbackMs = Math.max(text.length * 65, 4000);
-        fallbackTimerRef.current = setTimeout(() => {
-          setHasError(false);
-          onEnd?.();
-        }, fallbackMs);
-      }
+      });
     },
-    [clearFallbackTimer]
+    []
   );
 
   const pause = useCallback(() => {
-    clearFallbackTimer();
-    if (audioRef.current) {
-      audioRef.current.pause();
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.pause();
     }
     setIsSpeaking(false);
-  }, [clearFallbackTimer]);
+  }, []);
 
   const resume = useCallback(() => {
-    if (audioRef.current && !audioRef.current.ended) {
-      audioRef.current.play().then(() => {
-        setIsSpeaking(true);
-      }).catch(() => {
-        // Already paused or disposed
-      });
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.resume();
+      setIsSpeaking(true);
     }
   }, []);
 
   const stop = useCallback(() => {
-    clearFallbackTimer();
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.onended = null;
-      audioRef.current.onerror = null;
-      audioRef.current = null;
-    }
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current);
-      objectUrlRef.current = null;
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
     setIsSpeaking(false);
     setIsLoading(false);
     setHasError(false);
-  }, [clearFallbackTimer]);
+  }, []);
 
   useEffect(() => {
     return () => {
-      clearFallbackTimer();
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.onended = null;
-        audioRef.current.onerror = null;
-        audioRef.current = null;
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
       }
-      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
     };
-  }, [clearFallbackTimer]);
+  }, []);
 
   return { play, pause, resume, stop, prefetch, setVolume, isSpeaking, isLoading, hasError };
 }
