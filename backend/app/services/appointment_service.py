@@ -441,10 +441,26 @@ class AppointmentService:
 
     def _to_response(self, appointment: Appointment) -> AppointmentResponse:
         """Convert an Appointment model to an AppointmentResponse schema."""
+        from app.models.user import User
+
+        patient_name = None
+        doctor_name = None
+        try:
+            patient = db.session.get(User, appointment.patient_id)
+            if patient:
+                patient_name = f"{patient.first_name} {patient.last_name}"
+            doctor = db.session.get(User, appointment.doctor_id)
+            if doctor:
+                doctor_name = f"{doctor.first_name} {doctor.last_name}"
+        except Exception:
+            pass
+
         return AppointmentResponse(
             id=str(appointment.id),
             patient_id=str(appointment.patient_id),
             doctor_id=str(appointment.doctor_id),
+            patient_name=patient_name,
+            doctor_name=doctor_name,
             appointment_type=appointment.appointment_type,
             status=appointment.status,
             scheduled_at=appointment.scheduled_at,
