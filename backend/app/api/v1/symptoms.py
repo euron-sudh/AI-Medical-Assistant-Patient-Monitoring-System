@@ -58,7 +58,7 @@ def start_session():
 @bp.route("/session/<session_id>/message", methods=["POST"])
 @jwt_required()
 def send_message(session_id: str):
-    """Send a message in a symptom check session."""
+    """Send a message in a symptom check session and get AI response."""
     try:
         data = SendMessageRequest.model_validate(request.get_json())
     except ValidationError as e:
@@ -73,7 +73,26 @@ def send_message(session_id: str):
     if result is None:
         return jsonify({"error": {"code": "NOT_FOUND", "message": "Session not found or not in progress"}}), 404
 
-    return jsonify(result.model_dump(mode="json")), 200
+    # Extract the last assistant message as the AI response for the frontend
+    response_data = result.model_dump(mode="json")
+    ai_response = ""
+    if result.conversation_log:
+        for msg in reversed(result.conversation_log):
+            if isinstance(msg, dict) and msg.get("role") == "assistant":
+                ai_response = msg.get("content", "")
+                break
+
+    response_data["response"] = ai_response
+
+    # Include analysis fields at top level for frontend convenience
+    if result.ai_analysis:
+        response_data["urgency_score"] = result.ai_analysis.get("urgency_score")
+        response_data["differential_diagnosis"] = result.ai_analysis.get("differential_diagnosis")
+        response_data["recommended_action"] = result.ai_analysis.get("recommended_action")
+        response_data["recommended_specialist"] = result.ai_analysis.get("recommended_specialist")
+        response_data["recommended_tests"] = result.ai_analysis.get("recommended_tests")
+
+    return jsonify(response_data), 200
 
 
 @bp.route("/session/<session_id>", methods=["GET"])

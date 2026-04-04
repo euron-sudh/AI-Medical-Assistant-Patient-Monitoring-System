@@ -18,8 +18,13 @@ class CreatePatientProfileRequest(BaseModel):
 
 
 class UpdatePatientProfileRequest(BaseModel):
-    """Schema for updating a patient profile."""
+    """Schema for updating a patient profile.
 
+    Includes both PatientProfile fields and User-level fields (phone)
+    that can be updated by the patient from their profile page.
+    """
+
+    phone: str | None = Field(default=None, max_length=20)
     gender: str | None = Field(default=None, max_length=20)
     blood_type: str | None = Field(default=None, max_length=5)
     height_cm: float | None = Field(default=None, ge=0, le=300)

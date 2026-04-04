@@ -10,11 +10,12 @@ Routes:
     GET    /api/v1/reports/<patient_id>/<report_id>/lab-values — Get lab values
     GET    /api/v1/reports/<patient_id>/<report_id>/summary    — Get AI summary
     DELETE /api/v1/reports/<patient_id>/<report_id>            — Delete report
-
-Task #30 — Vikash Kumar (file upload + download endpoints)
 """
 
+import logging
+import os
 import uuid
+from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
@@ -26,6 +27,8 @@ from app.schemas.report_schema import (
     ReportListParams,
 )
 from app.services.report_service import report_service
+
+logger = logging.getLogger(__name__)
 
 bp = Blueprint("reports", __name__, url_prefix="/api/v1/reports")
 
@@ -103,11 +106,29 @@ def upload_report_file():
     # Determine file type from extension
     file_ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "bin"
 
-    # Upload to S3
-    from app.integrations.s3_client import s3_client
-
     file_bytes = file.read()
-    file_url = s3_client.upload_file(file_bytes, patient_id, file_ext)
+    file_url = None
+
+    # Try S3 upload first, fall back to local storage if S3 is unavailable
+    try:
+        from app.integrations.s3_client import s3_client
+        file_url = s3_client.upload_file(file_bytes, patient_id, file_ext)
+    except Exception as s3_err:
+        logger.warning("S3 upload failed, falling back to local storage: %s", s3_err)
+        # Store locally as fallback
+        upload_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "uploads", "reports", patient_id,
+        )
+        os.makedirs(upload_dir, exist_ok=True)
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d")
+        unique = uuid.uuid4().hex[:12]
+        filename = f"{ts}_{unique}.{file_ext}"
+        filepath = os.path.join(upload_dir, filename)
+        with open(filepath, "wb") as f:
+            f.write(file_bytes)
+        file_url = f"local://{filepath}"
+        logger.info("File stored locally at %s", filepath)
 
     # Create report record via service
     current_user_id = uuid.UUID(get_jwt_identity())
@@ -119,10 +140,12 @@ def upload_report_file():
     )
     report = report_service.create_report(patient_uuid, report_data, created_by=current_user_id)
 
-    # Dispatch async processing
-    from app.tasks.report_processing import process_medical_report
-
-    process_medical_report.delay(report.id)
+    # Try to dispatch async processing (may fail if Celery/Redis not running)
+    try:
+        from app.tasks.report_processing import process_medical_report
+        process_medical_report.delay(report.id)
+    except Exception as celery_err:
+        logger.warning("Celery task dispatch failed (report will need manual analysis): %s", celery_err)
 
     return jsonify({
         "report_id": report.id,

@@ -110,8 +110,22 @@ class PatientService:
         profile = self._get_profile_or_raise(user_id)
 
         update_data = data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(profile, field, value)
+
+        # Handle User-level fields separately
+        user_fields = {"phone"}
+        user_updates = {k: v for k, v in update_data.items() if k in user_fields}
+        profile_updates = {k: v for k, v in update_data.items() if k not in user_fields}
+
+        # Update User model fields
+        if user_updates:
+            user = db.session.get(User, profile.user_id)
+            if user:
+                for field_name, value in user_updates.items():
+                    setattr(user, field_name, value)
+
+        # Update PatientProfile fields
+        for field_name, value in profile_updates.items():
+            setattr(profile, field_name, value)
 
         db.session.commit()
         return self._to_response(profile)
