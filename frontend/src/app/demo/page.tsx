@@ -75,16 +75,16 @@ const SCENES: Scene[] = [
     title: "Welcome to MedAssist AI",
     subtitle: "Platform Overview",
     narration:
-      "Welcome to MedAssist AI, the enterprise-grade intelligent medical assistant platform designed to elevate the standard of patient care. By unifying AI-powered diagnostics, continuous patient monitoring, and real-time clinical decision support into a single secure platform, MedAssist AI empowers hospitals, telemedicine providers, and health systems to deliver faster, safer, and more personalized care at scale.",
-    durationMs: 18000,
+      "Welcome to MedAssist AI, the enterprise-grade intelligent medical assistant platform built to transform how healthcare is delivered. MedAssist AI serves three distinct user groups: patients who need accessible, transparent healthcare; doctors and nurses who need clinical decision support at the point of care; and hospital administrators who need operational oversight with full regulatory compliance. By unifying seven specialized AI agents, real-time patient monitoring, and secure telemedicine into a single HIPAA-compliant platform, MedAssist AI empowers health systems to deliver faster diagnoses, safer treatments, and measurably better outcomes at scale.",
+    durationMs: 22000,
   },
   {
     id: "patient-portal",
     title: "Patient Portal",
     subtitle: "Empowering Patients with Transparency",
     narration:
-      "The Patient Portal places each individual at the center of their care journey. Patients gain instant access to a personalized health dashboard where they can monitor their vitals in real time, review AI-analyzed medical reports in plain language, manage medication schedules with intelligent reminders, and communicate securely with their care team. Every interaction is protected by end-to-end encryption and full HIPAA compliance, ensuring patient trust from the very first login.",
-    durationMs: 22000,
+      "For patients, MedAssist AI eliminates the confusion and delays that define traditional healthcare. The Patient Portal provides a personalized health dashboard where patients monitor their vitals in real time, review AI-analyzed medical reports explained in plain language they can understand, track medications with smart reminders, check symptoms through an AI-guided interview before even visiting a clinic, and join video consultations from home. Patients can speak their symptoms using voice input, and the AI responds with both text and spoken guidance. Every interaction is encrypted end-to-end and fully HIPAA compliant, giving patients confidence that their most sensitive health data is protected.",
+    durationMs: 25000,
   },
   {
     id: "symptom-analysis",
@@ -123,8 +123,8 @@ const SCENES: Scene[] = [
     title: "Doctor Dashboard",
     subtitle: "A Clinical Command Center",
     narration:
-      "The Doctor Dashboard is a unified command center purpose-built for clinical efficiency. Physicians gain real-time visibility into their patient panel through a monitoring wall with color-coded status indicators, live vitals sparklines, and an intelligent alert feed. AI-assisted clinical note generation, priority patient queues ranked by acuity, and evidence-based decision support with source citations ensure that critical situations are identified and addressed without delay.",
-    durationMs: 22000,
+      "For doctors and nurses, the Doctor Dashboard is a unified command center purpose-built for clinical efficiency. Physicians see their entire patient panel at a glance through a real-time monitoring wall with color-coded severity indicators, live vitals sparklines, and an intelligent alert feed with one-click acknowledgment. The AI assistant helps generate clinical notes, check drug interactions before prescribing, and review patient history with AI-generated summaries. Priority patient queues are ranked by acuity, and every AI recommendation includes evidence-based citations so clinicians can verify the reasoning. This means faster clinical decisions, fewer documentation hours, and more time spent with patients.",
+    durationMs: 26000,
   },
   {
     id: "telemedicine",
@@ -139,8 +139,8 @@ const SCENES: Scene[] = [
     title: "Administration and Compliance",
     subtitle: "Enterprise-Grade Security, Built In",
     narration:
-      "HIPAA compliance is not an afterthought. It is woven into every layer of the MedAssist AI architecture. Data is encrypted at rest with AES-256 and in transit with TLS 1.3. A comprehensive audit trail records every access to protected health information with immutable, tamper-proof entries retained for the full regulatory period. Role-based access control with four distinct privilege levels, automated compliance reporting, and real-time infrastructure health monitoring provide your compliance and IT teams with complete operational confidence.",
-    durationMs: 24000,
+      "For hospital administrators, MedAssist AI provides complete operational control through the Admin Panel. Administrators manage all users and roles, monitor system infrastructure health in real time, configure AI agent behavior and thresholds, track AI token consumption and costs, view platform usage metrics across all departments, and access the full HIPAA audit trail. Every access to protected health information is recorded in immutable, tamper-proof log entries retained for the full six-year regulatory period. Data is encrypted at rest with AES-256 and in transit with TLS 1.3. Role-based access control with four distinct privilege levels ensures that every user sees only what they are authorized to see, giving compliance and IT teams complete operational confidence.",
+    durationMs: 28000,
   },
   {
     id: "ai-agents",
@@ -155,8 +155,8 @@ const SCENES: Scene[] = [
     title: "Transform Healthcare Today",
     subtitle: "Next Steps",
     narration:
-      "MedAssist AI. Seven specialized AI agents. Continuous real-time monitoring. Full HIPAA compliance. One unified platform engineered to transform care delivery at scale. We invite you to experience the future of healthcare firsthand. Contact our team to schedule a personalized live demonstration and discover how MedAssist AI can drive measurable outcomes for your organization.",
-    durationMs: 18000,
+      "MedAssist AI. Seven specialized AI agents working in concert. Continuous real-time patient monitoring with predictive alerting. Voice-enabled interactions audible in telemedicine sessions. Full HIPAA compliance with six-year audit retention. Three purpose-built portals for patients, clinicians, and administrators. One unified platform engineered to reduce diagnostic delays, prevent medication errors, and give every stakeholder the tools they need to deliver and receive better care. We invite you to experience the future of healthcare firsthand. Contact our team to schedule a personalized live demonstration.",
+    durationMs: 22000,
   },
 ];
 
