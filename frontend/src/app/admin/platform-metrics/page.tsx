@@ -8,7 +8,7 @@ export default function PlatformMetricsPage() {
   const [apiLatency, setApiLatency] = useState(0);
   useEffect(() => {
     const load = async () => {
-      try { const r = await apiClient.get("/admin/users"); const u = r.data.users ?? r.data ?? []; if (Array.isArray(u)) { setTotalUsers(u.length); const rc: Record<string,number> = {}; u.forEach((x:{role:string}) => { rc[x.role] = (rc[x.role]||0)+1; }); setRoleCounts(Object.entries(rc).map(([k,v]) => ({role:k.charAt(0).toUpperCase()+k.slice(1)+"s",count:v,percentage:Math.round(v/u.length*100)}))); } } catch {}
+      try { const r = await apiClient.get("/admin/users"); const u = r.data.users ?? r.data ?? []; if (Array.isArray(u) && u.length > 0) { setTotalUsers(u.length); const rc: Record<string,number> = {}; u.forEach((x:{role:string}) => { rc[x.role] = (rc[x.role]||0)+1; }); setRoleCounts(Object.entries(rc).map(([k,v]) => ({role:k.charAt(0).toUpperCase()+k.slice(1)+"s",count:v,percentage:Math.round((v/u.length)*100)}))); } } catch {}
       try { const s = performance.now(); await apiClient.get("/health"); setApiLatency(Math.round(performance.now()-s)); } catch {}
     };
     load();
