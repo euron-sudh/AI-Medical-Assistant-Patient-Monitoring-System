@@ -86,6 +86,8 @@ def _register_blueprints(app: Flask) -> None:
     from app.api.v1.analytics import bp as analytics_bp
     from app.api.v1.admin import bp as admin_bp
     from app.api.v1.voice import bp as voice_bp
+    from app.api.v1.voice_symptom import bp as voice_symptom_bp
+    from app.api.v1.realtime import bp as realtime_bp
     from app.api.v1.search import bp as search_bp
 
     app.register_blueprint(health_bp)
@@ -106,6 +108,8 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(analytics_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(voice_bp)
+    app.register_blueprint(voice_symptom_bp)
+    app.register_blueprint(realtime_bp)
     app.register_blueprint(search_bp)
 
 

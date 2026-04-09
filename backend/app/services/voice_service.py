@@ -7,6 +7,7 @@ from io import BytesIO
 import structlog
 
 from app.schemas.voice_schema import SynthesizeRequest, SynthesizeResponse, TranscribeResponse
+from app.config import BaseConfig
 
 logger = structlog.get_logger(__name__)
 
@@ -48,8 +49,9 @@ class VoiceService:
 
     def _transcribe_with_openai(self, audio_data: bytes, filename: str) -> TranscribeResponse:
         """Call OpenAI Whisper API for transcription."""
-        import openai
-        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+        from openai import OpenAI
+        base_url = BaseConfig.OPENAI_BASE_URL or BaseConfig.EURI_BASE_URL
+        client = OpenAI(api_key=OPENAI_API_KEY, base_url=base_url) if base_url else OpenAI(api_key=OPENAI_API_KEY)
         audio_file = BytesIO(audio_data)
         audio_file.name = filename
         result = client.audio.transcriptions.create(
@@ -62,8 +64,9 @@ class VoiceService:
 
     def _synthesize_with_openai(self, data: SynthesizeRequest) -> SynthesizeResponse:
         """Call OpenAI TTS API for speech synthesis."""
-        import openai
-        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+        from openai import OpenAI
+        base_url = BaseConfig.OPENAI_BASE_URL or BaseConfig.EURI_BASE_URL
+        client = OpenAI(api_key=OPENAI_API_KEY, base_url=base_url) if base_url else OpenAI(api_key=OPENAI_API_KEY)
         response = client.audio.speech.create(
             model=OPENAI_TTS_MODEL, voice=data.voice, input=data.text, speed=data.speed,
         )

@@ -23,3 +23,4 @@ from app.models.symptom_session import SymptomSession  # noqa: F401
 from app.models.conversation import Conversation  # noqa: F401
 from app.models.appointment import Appointment  # noqa: F401
 from app.models.telemedicine import TelemedicineSession  # noqa: F401
+from app.models.voice_session import VoiceSession  # noqa: F401

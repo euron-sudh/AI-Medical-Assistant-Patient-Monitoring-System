@@ -198,9 +198,9 @@ const FEATURES = [
   },
   {
     icon: Mic,
-    title: "Voice Assistant",
+    title: "Realtime AI Assistant",
     description:
-      "Speak your symptoms naturally using voice interaction. AI transcribes, analyzes, and responds in real time.",
+      "Talk naturally with a real-time AI assistant that listens and responds with voice, guiding symptom intake and next steps.",
     color: "text-amber-600 bg-amber-50 group-hover:bg-amber-100",
     image: "https://images.unsplash.com/photo-1559757175-5700dde675bc?w=400&h=250&fit=crop&q=80",
   },
