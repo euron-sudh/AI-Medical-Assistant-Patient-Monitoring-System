@@ -45,6 +45,29 @@ from app.integrations.openai_client import OpenAIClient
 logger = structlog.get_logger(__name__)
 
 
+_LANGUAGE_NAMES = {
+    "en": "English",
+    "en-us": "English",
+    "en-gb": "English",
+    "hi": "Hindi (हिन्दी)",
+    "es": "Spanish (Español)",
+    "fr": "French (Français)",
+    "de": "German (Deutsch)",
+    "pt": "Portuguese (Português)",
+    "it": "Italian (Italiano)",
+    "ar": "Arabic (العربية)",
+    "zh": "Chinese (中文)",
+    "ja": "Japanese (日本語)",
+    "ko": "Korean (한국어)",
+    "ru": "Russian (Русский)",
+    "ta": "Tamil (தமிழ்)",
+    "te": "Telugu (తెలుగు)",
+    "bn": "Bengali (বাংলা)",
+    "mr": "Marathi (मराठी)",
+    "gu": "Gujarati (ગુજરાતી)",
+}
+
+
 class VoiceSymptomAnalystAgent(BaseAgent):
     """Voice-based symptom analysis agent with conversational interview.
 
@@ -199,22 +222,38 @@ VOICE-SPECIFIC GUIDELINES:
         self, agent_input: AgentInput
     ) -> list[dict[str, str]]:
         """Build message array with system prompt and few-shot examples."""
-        messages = [{"role": "system", "content": self._get_system_prompt()}]
-        
+        system_prompt = self._get_system_prompt()
+
+        # Language directive: if the session carries a language code, instruct
+        # the model to reply in that language.
+        language = None
+        if isinstance(agent_input.metadata, dict):
+            language = agent_input.metadata.get("language")
+        if language:
+            lang_name = _LANGUAGE_NAMES.get(str(language).lower(), str(language))
+            system_prompt += (
+                f"\n\nLANGUAGE REQUIREMENT: Reply to the patient in {lang_name}. "
+                "Use simple, natural phrasing appropriate for a spoken conversation. "
+                "If the patient writes in a different language, continue in that "
+                "language instead."
+            )
+
+        messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+
         # Add few-shot examples
         messages.extend(SYMPTOM_ANALYSIS_FEW_SHOT_EXAMPLES)
         messages.extend(EMERGENCY_DETECTION_EXAMPLES)
-        
+
         # Add conversation history
         for msg in agent_input.conversation_history:
             messages.append({
                 "role": msg.get("role", "user"),
                 "content": msg.get("content", ""),
             })
-        
+
         # Add current message
         messages.append({"role": "user", "content": agent_input.message})
-        
+
         return messages
 
     def _parse_result(

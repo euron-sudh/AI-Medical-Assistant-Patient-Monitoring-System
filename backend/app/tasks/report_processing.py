@@ -86,6 +86,80 @@ def _generate_ai_summary(report_type: str, text_content: str) -> str:
         return f"AI summary for {report_type} report (auto-generated fallback)."
 
 
+def _suggest_appointment(
+    report_type: str,
+    summary: str,
+    abnormal_findings: list[str],
+) -> dict:
+    """Use the LLM to suggest a follow-up appointment based on report findings.
+
+    Returns a dict with keys: needs_appointment (bool), specialist (str|None),
+    urgency (str: routine|soon|urgent|emergency), rationale (str).
+    """
+    if not abnormal_findings and not summary:
+        return {
+            "needs_appointment": False,
+            "specialist": None,
+            "urgency": "routine",
+            "rationale": "",
+        }
+
+    try:
+        from app.integrations.openai_client import openai_client
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a medical triage assistant. Given a report summary and "
+                    "abnormal findings, decide whether the patient should book an "
+                    "appointment and with what specialist. Return JSON with keys: "
+                    "needs_appointment (boolean), specialist (string, e.g. "
+                    "'Cardiologist', 'Endocrinologist', 'General Practitioner'), "
+                    "urgency ('routine' | 'soon' | 'urgent' | 'emergency'), "
+                    "rationale (one short sentence). Err on the side of caution."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Report type: {report_type}\n"
+                    f"AI summary: {summary}\n"
+                    f"Abnormal findings:\n- "
+                    + "\n- ".join(abnormal_findings[:10])
+                ),
+            },
+        ]
+        response = openai_client.chat_completion(
+            messages=messages,
+            temperature=0.1,
+            max_tokens=512,
+            response_format={"type": "json_object"},
+        )
+        parsed = json.loads(response.content or "{}") if response.content else {}
+        return {
+            "needs_appointment": bool(parsed.get("needs_appointment", False)),
+            "specialist": parsed.get("specialist"),
+            "urgency": parsed.get("urgency", "routine"),
+            "rationale": parsed.get("rationale", ""),
+        }
+    except Exception as exc:
+        logger.warning("appointment_suggestion_failed: %s", exc)
+        if abnormal_findings:
+            return {
+                "needs_appointment": True,
+                "specialist": "General Practitioner",
+                "urgency": "soon",
+                "rationale": "Abnormal findings detected — follow-up recommended.",
+            }
+        return {
+            "needs_appointment": False,
+            "specialist": None,
+            "urgency": "routine",
+            "rationale": "",
+        }
+
+
 def _parse_lab_values(text_content: str) -> list[dict]:
     """Parse lab values from extracted text using OpenAI.
 
@@ -240,18 +314,66 @@ def process_medical_report(self, report_id: str) -> dict:
                 db.session.add(lv)
             lab_values_count = len(lab_entries)
 
-        # Step 5 — mark completed
+        # Step 5 — appointment suggestion based on findings
+        abnormal_findings: list[str] = []
+        if report.report_type == "lab":
+            from app.models.report import LabValue as _LV
+
+            abnormal_values = (
+                db.session.query(_LV)
+                .filter(_LV.report_id == report.id, _LV.is_abnormal.is_(True))
+                .all()
+            )
+            for lv in abnormal_values:
+                unit = lv.unit or ""
+                val = f"{lv.value} {unit}".strip() if lv.value is not None else "abnormal"
+                abnormal_findings.append(f"{lv.test_name}: {val}")
+
+        suggestion = _suggest_appointment(
+            report_type=report.report_type,
+            summary=report.ai_summary or "",
+            abnormal_findings=abnormal_findings,
+        )
+
+        # Persist the appointment suggestion and abnormal findings into ai_analysis JSONB
+        report.ai_analysis = {
+            "abnormal_findings": abnormal_findings,
+            "appointment_suggestion": suggestion,
+        }
+
+        # Step 6 — mark completed
         report.status = "completed"
         report.updated_at = datetime.now(timezone.utc)
         db.session.commit()
 
-        # Step 6 — notify the patient
+        # Step 7 — notify the patient (in-app + email)
         _create_notification(report.patient_id, report.id, report.title)
+
+        try:
+            from app.tasks.notification_tasks import send_report_ready_email
+
+            urgency_label = {
+                "routine": "Routine",
+                "soon": "Within 1-2 weeks",
+                "urgent": "Urgent (within 48 hours)",
+                "emergency": "Emergency — seek care now",
+            }.get(str(suggestion.get("urgency", "routine")), "Routine")
+
+            send_report_ready_email.delay(
+                report_id=str(report.id),
+                abnormal_findings=abnormal_findings,
+                recommended_specialist=suggestion.get("specialist"),
+                urgency_label=urgency_label,
+            )
+        except Exception as exc:
+            logger.warning("report_ready_email_dispatch_failed: %s", exc)
 
         return {
             "status": "completed",
             "report_id": report_id,
             "lab_values_count": lab_values_count,
+            "appointment_suggested": suggestion.get("needs_appointment", False),
+            "recommended_specialist": suggestion.get("specialist"),
         }
 
     except Exception as exc:

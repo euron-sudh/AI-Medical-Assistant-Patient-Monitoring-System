@@ -86,6 +86,37 @@ class AppointmentService:
             appointment_type=data.appointment_type,
         )
 
+        # Best-effort: send confirmation email + in-app notification.
+        # Failures must not block appointment creation.
+        try:
+            from app.tasks.notification_tasks import send_appointment_booked_email
+
+            send_appointment_booked_email.delay(str(appointment.id))
+        except Exception as exc:
+            logger.warning(
+                "appointment_email_dispatch_failed",
+                appointment_id=str(appointment.id),
+                error=str(exc),
+            )
+
+        try:
+            self._send_appointment_notification(
+                appointment,
+                title="Appointment Booked",
+                message=(
+                    f"Your appointment on "
+                    f"{appointment.scheduled_at.strftime('%Y-%m-%d %H:%M')} "
+                    f"has been booked."
+                ),
+                notification_type="appointment_booked",
+            )
+        except Exception as exc:
+            logger.warning(
+                "appointment_in_app_notification_failed",
+                appointment_id=str(appointment.id),
+                error=str(exc),
+            )
+
         return self._to_response(appointment)
 
     def get_appointment(self, appointment_id: uuid.UUID) -> AppointmentResponse | None:

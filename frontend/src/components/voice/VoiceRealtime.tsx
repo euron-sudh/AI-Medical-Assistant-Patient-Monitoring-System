@@ -21,7 +21,22 @@ function safeJsonParse(input: string): unknown {
   }
 }
 
-export default function VoiceRealtime() {
+interface VoiceRealtimeProps {
+  /** ISO-639-1 language code; when provided, the model is asked to reply in that language. */
+  language?: string;
+}
+
+const LANGUAGE_LABELS: Record<string, string> = {
+  en: "English",
+  hi: "Hindi",
+  es: "Spanish",
+  fr: "French",
+  de: "German",
+  ar: "Arabic",
+  zh: "Chinese (Mandarin)",
+};
+
+export default function VoiceRealtime({ language }: VoiceRealtimeProps = {}) {
   const [status, setStatus] = useState<
     "idle" | "creating_session" | "connecting" | "connected" | "recording" | "error"
   >("idle");
@@ -224,14 +239,18 @@ export default function VoiceRealtime() {
 
         if (introPhaseRef.current === "awaiting_user" && isUserSpeech) {
           introPhaseRef.current = "followup_sent";
+          const langLabel = language ? LANGUAGE_LABELS[language] ?? language : null;
+          const languageLine = langLabel
+            ? `- Reply in ${langLabel}. If the patient uses a different language, switch to that language instead.`
+            : "- Continue in the same language as the patient's most recent utterance.";
           const followup = {
             type: "response.create",
             response: {
               modalities: ["audio", "text"],
               instructions:
                 "Now start the medical interview.\n" +
-                "- Continue in the same language as the patient's most recent utterance.\n" +
-                "- If unsure, ask a short clarification question about language.\n" +
+                languageLine + "\n" +
+                "- If unsure about language, ask a short clarification question about language.\n" +
                 "- Ask ONE question at a time to understand symptoms.\n" +
                 "- When you have enough information, recommend appropriate medical tests and next steps.\n" +
                 "- If emergency symptoms are suspected, advise calling emergency services immediately.\n\n" +
@@ -280,7 +299,7 @@ export default function VoiceRealtime() {
       setStatus("error");
       cleanup();
     }
-  }, [appendLog, canUseWebRTC, cleanup, ttsEnabled]);
+  }, [appendLog, canUseWebRTC, cleanup, ttsEnabled, language]);
 
   useEffect(() => {
     return () => cleanup();

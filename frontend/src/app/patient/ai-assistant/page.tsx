@@ -1,9 +1,20 @@
 "use client";
 
-import { useMemo } from "react";
-import { Bell, FileText, Search, Video } from "lucide-react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { Bell, FileText, Globe, Upload, Video } from "lucide-react";
 import VoiceRealtime from "@/components/voice/VoiceRealtime";
 import { useAuth } from "@/hooks/useAuth";
+
+const LANGUAGES: { code: string; label: string; flag: string }[] = [
+  { code: "en", label: "English", flag: "🇬🇧" },
+  { code: "hi", label: "हिन्दी Hindi", flag: "🇮🇳" },
+  { code: "es", label: "Español", flag: "🇪🇸" },
+  { code: "fr", label: "Français", flag: "🇫🇷" },
+  { code: "de", label: "Deutsch", flag: "🇩🇪" },
+  { code: "ar", label: "العربية", flag: "🇸🇦" },
+  { code: "zh", label: "中文", flag: "🇨🇳" },
+];
 
 function StatusPill() {
   return (
@@ -51,9 +62,96 @@ function VoiceVisualizer() {
   );
 }
 
+function DoctorAvatar() {
+  // Inline SVG doctor portrait — no external dependency, always loads.
+  return (
+    <svg
+      viewBox="0 0 400 500"
+      className="absolute inset-0 h-full w-full"
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden="true"
+    >
+      <defs>
+        <radialGradient id="halo" cx="50%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
+          <stop offset="60%" stopColor="#0ea5e9" stopOpacity="0.12" />
+          <stop offset="100%" stopColor="#020617" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="coat" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#f8fafc" />
+          <stop offset="100%" stopColor="#cbd5e1" />
+        </linearGradient>
+        <linearGradient id="skin" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#fde6d3" />
+          <stop offset="100%" stopColor="#e9c4a4" />
+        </linearGradient>
+      </defs>
+      <rect width="400" height="500" fill="#050b18" />
+      <circle cx="200" cy="180" r="260" fill="url(#halo)" />
+
+      {/* Shoulders / coat */}
+      <path
+        d="M 60 500 Q 60 360 150 330 L 250 330 Q 340 360 340 500 Z"
+        fill="url(#coat)"
+      />
+      {/* Stethoscope loop */}
+      <path
+        d="M 150 345 Q 200 430 250 345"
+        fill="none"
+        stroke="#0f172a"
+        strokeWidth="6"
+        strokeLinecap="round"
+        opacity="0.85"
+      />
+      <circle cx="200" cy="430" r="9" fill="#e2e8f0" stroke="#0f172a" strokeWidth="3" />
+      {/* Collar line */}
+      <path d="M 150 330 L 200 380 L 250 330" fill="#f1f5f9" stroke="#94a3b8" strokeWidth="2" />
+
+      {/* Neck */}
+      <rect x="180" y="290" width="40" height="50" rx="8" fill="url(#skin)" />
+
+      {/* Head */}
+      <ellipse cx="200" cy="220" rx="78" ry="92" fill="url(#skin)" />
+      {/* Hair */}
+      <path
+        d="M 130 200 Q 140 120 200 115 Q 265 115 275 200 Q 260 165 200 160 Q 145 170 130 200 Z"
+        fill="#1e293b"
+      />
+      {/* Eyes */}
+      <ellipse cx="175" cy="225" rx="6" ry="4" fill="#0f172a" />
+      <ellipse cx="225" cy="225" rx="6" ry="4" fill="#0f172a" />
+      {/* Smile */}
+      <path
+        d="M 180 260 Q 200 278 220 260"
+        fill="none"
+        stroke="#9a3412"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+      {/* Glow ring around head */}
+      <circle
+        cx="200"
+        cy="220"
+        r="108"
+        fill="none"
+        stroke="#38bdf8"
+        strokeWidth="1.5"
+        opacity="0.4"
+      />
+    </svg>
+  );
+}
+
 export default function AiAssistantPage() {
   const { user } = useAuth();
   const _patientId = user?.id ?? "";
+  const [language, setLanguage] = useState<string>("en");
+  const [langOpen, setLangOpen] = useState(false);
+
+  const currentLang = useMemo(
+    () => LANGUAGES.find((l) => l.code === language) ?? LANGUAGES[0],
+    [language],
+  );
 
   return (
     <div className="-m-8 h-[calc(100vh-4rem)] overflow-hidden bg-[#0F1115]">
@@ -71,16 +169,60 @@ export default function AiAssistantPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="relative hidden w-64 md:block">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search medical terms..."
-                className="w-full rounded-full bg-slate-100/80 py-2 pl-9 pr-4 text-sm outline-none ring-0 focus:bg-white focus:ring-2 focus:ring-sky-500/20"
-              />
+          <div className="flex items-center gap-3">
+            {/* Language picker */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setLangOpen((v) => !v)}
+                className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:border-sky-200 hover:text-sky-700"
+                aria-haspopup="menu"
+                aria-expanded={langOpen}
+              >
+                <Globe className="h-4 w-4 text-sky-600" />
+                <span className="hidden sm:inline">
+                  {currentLang.flag} {currentLang.label}
+                </span>
+                <span className="sm:hidden">{currentLang.flag}</span>
+              </button>
+              {langOpen && (
+                <div
+                  className="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg"
+                  role="menu"
+                >
+                  {LANGUAGES.map((lang) => (
+                    <button
+                      key={lang.code}
+                      type="button"
+                      onClick={() => {
+                        setLanguage(lang.code);
+                        setLangOpen(false);
+                      }}
+                      className={`flex w-full items-center gap-2 px-4 py-2 text-left text-sm transition-colors hover:bg-slate-50 ${
+                        language === lang.code ? "bg-sky-50 text-sky-700" : "text-slate-700"
+                      }`}
+                      role="menuitem"
+                    >
+                      <span>{lang.flag}</span>
+                      <span>{lang.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <button className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:border-sky-200 hover:text-sky-600">
+
+            <Link
+              href="/patient/reports"
+              className="hidden items-center gap-2 rounded-full border border-sky-100 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 shadow-sm transition-colors hover:bg-sky-100 sm:flex"
+            >
+              <Upload className="h-4 w-4" />
+              Upload Report
+            </Link>
+
+            <button
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:border-sky-200 hover:text-sky-600"
+              aria-label="Notifications"
+            >
               <Bell className="h-4 w-4" />
             </button>
             <button className="rounded-lg border border-red-100 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100">
@@ -94,15 +236,7 @@ export default function AiAssistantPage() {
           {/* Left: Avatar stage */}
           <div className="group relative flex flex-1 flex-col overflow-hidden rounded-[24px] border border-slate-800/30 bg-[#0F1115] shadow-lg">
             <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-[#0F1115] to-black" />
-            <div
-              className="absolute inset-0 opacity-80 mix-blend-luminosity"
-              style={{
-                backgroundImage:
-                  "url('https://storage.googleapis.com/uxpilot-auth.appspot.com/843cfccd25-cb61b2ec80857f53f340.png')",
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-              }}
-            />
+            <DoctorAvatar />
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
             <div className="absolute inset-0 bg-sky-500/10 mix-blend-overlay" />
 
@@ -144,7 +278,7 @@ export default function AiAssistantPage() {
           {/* Right: Realtime controls + History */}
           <div className="flex w-80 flex-shrink-0 flex-col gap-6 overflow-y-auto pb-4">
             <div className="rounded-[24px] border border-slate-100 bg-white p-4 shadow-sm">
-              <VoiceRealtime />
+              <VoiceRealtime language={language} />
             </div>
 
             <div className="flex-1 rounded-[24px] border border-slate-100 bg-white p-5 shadow-sm">

@@ -75,6 +75,16 @@ class BaseConfig:
     SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
     SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL", "")
 
+    # SMTP (fallback when SendGrid is not configured — supports Gmail SMTP, etc.)
+    SMTP_HOST = os.getenv("SMTP_HOST", "")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "587") or 587)
+    SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+    SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+    SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "")
+    SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "MedAssist AI")
+    APP_PUBLIC_URL = os.getenv("APP_PUBLIC_URL", "http://medassist-ai.136.119.221.67.nip.io")
+
     # Daily.co
     DAILY_API_KEY = os.getenv("DAILY_API_KEY", "")
     DAILY_DOMAIN = os.getenv("DAILY_DOMAIN", "")

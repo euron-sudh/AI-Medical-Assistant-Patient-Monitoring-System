@@ -97,7 +97,11 @@ class VoiceSymptomService:
                 audio_data = base64.b64decode(data.audio_base64)
                 # Browser MediaRecorder typically produces WebM/Opus. Provide a filename hint
                 # so the upstream STT client can infer container/codec correctly.
-                transcription = voice_service.transcribe(audio_data, filename="audio.webm")
+                transcription = voice_service.transcribe(
+                    audio_data,
+                    filename="audio.webm",
+                    language=state.language,
+                )
                 user_message = transcription.text
                 logger.info(
                     "voice_audio_transcribed",
