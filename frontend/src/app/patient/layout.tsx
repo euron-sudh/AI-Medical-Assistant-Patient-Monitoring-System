@@ -16,6 +16,7 @@ const navItems = [
   { href: "/patient/medications", label: "Medications", icon: "M" },
   { href: "/patient/appointments", label: "Appointments", icon: "A" },
   { href: "/patient/chat", label: "AI Chat", icon: "C" },
+  { href: "/patient/ai-assistant", label: "AI Assistant", icon: "🤖" },
   { href: "/patient/care-plan", label: "Care Plan", icon: "P" },
   { href: "/patient/profile", label: "Profile", icon: "U" },
 ];

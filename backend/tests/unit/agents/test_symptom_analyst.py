@@ -548,11 +548,14 @@ class TestAgentOrchestrator:
         self, mock_openai_client, sample_agent_input, structured_response_content
     ):
         """Orchestrator falls back to symptom_analyst for unregistered agent types."""
+        # Use an agent name guaranteed NOT to be in AGENT_REGISTRY so the
+        # fallback path is exercised regardless of which specialist agents
+        # happen to be registered.
         classification_response = _make_openai_response(
             json.dumps({
-                "agent": "report_reader",
+                "agent": "nonexistent_agent_xyz",
                 "confidence": 0.8,
-                "reasoning": "Seems like a report question",
+                "reasoning": "Simulating an unknown agent classification",
             })
         )
         analyst_response = _make_openai_response(structured_response_content)
@@ -565,7 +568,6 @@ class TestAgentOrchestrator:
         orchestrator = AgentOrchestrator(openai_client=mock_openai_client)
         result = orchestrator.route(sample_agent_input)
 
-        # Falls back to symptom analyst since report_reader isn't registered
         assert isinstance(result, SymptomAnalysisResult)
 
     def test_falls_back_on_classification_error(
