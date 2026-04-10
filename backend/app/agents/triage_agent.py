@@ -26,7 +26,7 @@ from app.agents.base_agent import AgentInput, AgentOutput, BaseAgent
 from app.agents.guardrails import append_disclaimer, check_emergency, AI_DISCLAIMER
 from app.agents.tools.urgency_scoring import (
     calculate_urgency_score,
-    CALCULATE_URGENCY_TOOL,
+    CALCULATE_URGENCY_SCORE_TOOL,
     recommend_specialist,
     RECOMMEND_SPECIALIST_TOOL,
 )
@@ -206,7 +206,7 @@ OUTPUT FORMAT (JSON):
 }"""
 
     def _get_tools(self) -> list[dict[str, Any]]:
-        return [CALCULATE_URGENCY_TOOL, RECOMMEND_SPECIALIST_TOOL]
+        return [CALCULATE_URGENCY_SCORE_TOOL, RECOMMEND_SPECIALIST_TOOL]
 
     def run(self, agent_input: AgentInput) -> AgentOutput:
         start = time.time()

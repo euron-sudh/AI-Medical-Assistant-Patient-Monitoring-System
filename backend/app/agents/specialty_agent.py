@@ -28,7 +28,7 @@ from app.agents.tools.medical_kb import (
 )
 from app.agents.tools.urgency_scoring import (
     calculate_urgency_score,
-    CALCULATE_URGENCY_TOOL,
+    CALCULATE_URGENCY_SCORE_TOOL,
     recommend_specialist,
     RECOMMEND_SPECIALIST_TOOL,
 )
@@ -129,7 +129,7 @@ Only return the JSON format when you have enough information for an assessment."
         return [
             SEARCH_MEDICAL_KB_TOOL,
             QUERY_PATIENT_HISTORY_TOOL,
-            CALCULATE_URGENCY_TOOL,
+            CALCULATE_URGENCY_SCORE_TOOL,
             RECOMMEND_SPECIALIST_TOOL,
             RECOMMEND_TESTS_TOOL,
         ]
