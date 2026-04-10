@@ -11,7 +11,11 @@ class CreateVitalsRequest(BaseModel):
     heart_rate: int | None = Field(default=None, ge=20, le=300)
     blood_pressure_systolic: int | None = Field(default=None, ge=50, le=300)
     blood_pressure_diastolic: int | None = Field(default=None, ge=20, le=200)
-    temperature: float | None = Field(default=None, ge=90.0, le=115.0)
+    # Accept both Celsius (30-45) and Fahrenheit (90-115) ranges. The
+    # monitoring service and NEWS2 scoring interpret values as Celsius;
+    # keeping a wide combined range avoids rejecting valid inputs until
+    # the codebase is fully aligned on a single unit (follow-up).
+    temperature: float | None = Field(default=None, ge=30.0, le=115.0)
     oxygen_saturation: float | None = Field(default=None, ge=0, le=100)
     respiratory_rate: int | None = Field(default=None, ge=4, le=60)
     blood_glucose: float | None = Field(default=None, ge=20, le=600)
