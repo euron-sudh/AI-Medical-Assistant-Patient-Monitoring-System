@@ -61,11 +61,40 @@ def sample_doctor(db):
 
 
 @pytest.fixture
-def auth_headers(client, sample_user):
-    """Get JWT auth headers for the sample patient user."""
-    response = client.post("/api/v1/auth/login", json={
-        "email": "patient@test.com",
-        "password": "securepass123",
-    })
-    token = response.get_json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
+def auth_headers(client, db):
+    """JWT auth headers keyed by role.
+
+    Creates one user per role (patient, doctor, nurse, admin), logs each in,
+    and returns a mapping::
+
+        {
+            "patient": {"Authorization": "Bearer ..."},
+            "doctor":  {"Authorization": "Bearer ..."},
+            "nurse":   {"Authorization": "Bearer ..."},
+            "admin":   {"Authorization": "Bearer ..."},
+        }
+
+    Tests that want a single header can do ``auth_headers["patient"]``.
+    """
+    roles = [
+        ("patient", "patient@test.com", "Test", "Patient"),
+        ("doctor", "doctor@test.com", "Dr. Test", "Doctor"),
+        ("nurse", "nurse@test.com", "Test", "Nurse"),
+        ("admin", "admin@test.com", "Test", "Admin"),
+    ]
+
+    headers: dict[str, dict[str, str]] = {}
+    for role, email, first, last in roles:
+        user = User(email=email, first_name=first, last_name=last, role=role)
+        user.set_password("securepass123")
+        db.session.add(user)
+        db.session.commit()
+
+        resp = client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": "securepass123"},
+        )
+        token = resp.get_json()["access_token"]
+        headers[role] = {"Authorization": f"Bearer {token}"}
+
+    return headers

@@ -38,12 +38,16 @@ class TestCreateReading:
     """Tests for VitalsService.create_reading."""
 
     def test_create_reading_with_valid_data(self, db, vitals_service, patient):
-        """Creating a vitals reading with valid data returns a VitalsResponse."""
+        """Creating a vitals reading with valid data returns a VitalsResponse.
+
+        Note: the monitoring service uses Celsius thresholds (36.0-37.8 C),
+        so temperatures are provided in Celsius throughout.
+        """
         data = CreateVitalsRequest(
             heart_rate=75,
             blood_pressure_systolic=120,
             blood_pressure_diastolic=80,
-            temperature=98.6,
+            temperature=37.0,  # 98.6 F expressed as Celsius
             oxygen_saturation=98.0,
             respiratory_rate=16,
         )
@@ -53,7 +57,7 @@ class TestCreateReading:
         assert result.heart_rate == 75
         assert result.blood_pressure_systolic == 120
         assert result.blood_pressure_diastolic == 80
-        assert result.temperature == 98.6
+        assert result.temperature == 37.0
         assert result.oxygen_saturation == 98.0
         assert result.respiratory_rate == 16
         assert result.patient_id == str(patient.id)
