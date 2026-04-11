@@ -68,6 +68,7 @@ class OpenAIClient:
         org_id: str | None = None,
         default_model: str | None = None,
         timeout: int | None = None,
+        base_url: str | None = None,
     ) -> None:
         """Initialize the OpenAI client.
 
@@ -76,6 +77,7 @@ class OpenAIClient:
             org_id: OpenAI organization ID. Falls back to config if not provided.
             default_model: Default model to use. Falls back to config if not provided.
             timeout: Request timeout in seconds.
+            base_url: Optional API base URL; when omitted, uses OPENAI_BASE_URL then EURI_BASE_URL from config.
         """
         self._api_key = api_key or BaseConfig.OPENAI_API_KEY
         self._org_id = org_id or BaseConfig.OPENAI_ORG_ID
@@ -85,14 +87,16 @@ class OpenAIClient:
         if not self._api_key:
             logger.warning("openai_client_no_api_key")
 
-        # Use EURI/OpenAI-compatible API gateway if configured
-        base_url = BaseConfig.OPENAI_BASE_URL or BaseConfig.EURI_BASE_URL
+        # Use explicit base_url param, else OPENAI_BASE_URL then EURI_BASE_URL from config
+        effective_base = (base_url or "").strip() or None
+        if effective_base is None:
+            effective_base = (BaseConfig.OPENAI_BASE_URL or BaseConfig.EURI_BASE_URL or "").strip() or None
         client_kwargs: dict[str, Any] = {
             "api_key": self._api_key,
             "timeout": self._timeout,
         }
-        if base_url:
-            client_kwargs["base_url"] = base_url
+        if effective_base:
+            client_kwargs["base_url"] = effective_base.rstrip("/")
         if self._org_id:
             client_kwargs["organization"] = self._org_id
 

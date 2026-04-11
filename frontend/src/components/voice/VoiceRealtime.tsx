@@ -1,396 +1,332 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Mic, Square, Volume2, VolumeX, RefreshCcw } from "lucide-react";
-import apiClient from "@/lib/api-client";
+import {
+  Bot,
+  Download,
+  Loader2,
+  MessageSquare,
+  RefreshCcw,
+  Share2,
+  Square,
+  User,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
+import { useVoiceRealtime, type VoiceRealtimeState } from "@/hooks/useVoiceRealtime";
 
-type RealtimeSessionResponse = {
-  model: string;
-  voice: string;
-  expires_at?: number | string | null;
-  client_secret: string;
-};
+type Props = { voice: VoiceRealtimeState };
 
-type LogItem = { id: string; ts: Date; type: string; data: unknown };
-
-function safeJsonParse(input: string): unknown {
-  try {
-    return JSON.parse(input);
-  } catch {
-    return null;
-  }
+function formatTime(d: Date) {
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
-interface VoiceRealtimeProps {
-  /** ISO-639-1 language code; when provided, the model is asked to reply in that language. */
-  language?: string;
-}
+export function VoiceTranscriptPanel({ voice }: Props) {
+  const {
+    thread,
+    assistantText,
+    userText,
+    threadEndRef,
+    exportTranscript,
+    error,
+    isSessionActive,
+    status,
+  } = voice;
 
-const LANGUAGE_LABELS: Record<string, string> = {
-  en: "English",
-  hi: "Hindi",
-  es: "Spanish",
-  fr: "French",
-  de: "German",
-  ar: "Arabic",
-  zh: "Chinese (Mandarin)",
-};
-
-export default function VoiceRealtime({ language }: VoiceRealtimeProps = {}) {
-  const [status, setStatus] = useState<
-    "idle" | "creating_session" | "connecting" | "connected" | "recording" | "error"
-  >("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [ttsEnabled, setTtsEnabled] = useState(true);
-  const [assistantText, setAssistantText] = useState("");
-  const [userText, setUserText] = useState("");
-  const [logs, setLogs] = useState<LogItem[]>([]);
-
-  const pcRef = useRef<RTCPeerConnection | null>(null);
-  const dcRef = useRef<RTCDataChannel | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
-  const lastAssistantChunkRef = useRef<string>("");
-  const lastUserChunkRef = useRef<string>("");
-  const introPhaseRef = useRef<"idle" | "intro_sent" | "awaiting_user" | "followup_sent">("idle");
-
-  const canUseWebRTC = useMemo(() => {
-    if (typeof window === "undefined") return false;
-    return "RTCPeerConnection" in window && !!navigator.mediaDevices?.getUserMedia;
-  }, []);
-
-  const appendLog = useCallback((type: string, data: unknown) => {
-    setLogs((prev) => [
-      ...prev.slice(-80),
-      { id: crypto.randomUUID(), ts: new Date(), type, data },
-    ]);
-  }, []);
-
-  const INTRO_TEXT =
-    "Hello there I am Med Assist virtual doctor I am here to assist you on your symptoms.";
-
-  const cleanup = useCallback(() => {
-    setStatus("idle");
-    setError(null);
-    introPhaseRef.current = "idle";
-    lastAssistantChunkRef.current = "";
-    lastUserChunkRef.current = "";
-
-    try {
-      dcRef.current?.close();
-    } catch {
-      // ignore
-    }
-    dcRef.current = null;
-
-    try {
-      pcRef.current?.close();
-    } catch {
-      // ignore
-    }
-    pcRef.current = null;
-
-    const stream = localStreamRef.current;
-    if (stream) stream.getTracks().forEach((t) => t.stop());
-    localStreamRef.current = null;
-
-    if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
-  }, []);
-
-  const start = useCallback(async () => {
-    if (!canUseWebRTC) {
-      setError("WebRTC audio is not supported in this browser.");
-      setStatus("error");
-      return;
-    }
-
-    setAssistantText("");
-    setUserText("");
-    setLogs([]);
-    setError(null);
-    setStatus("creating_session");
-    introPhaseRef.current = "idle";
-    lastAssistantChunkRef.current = "";
-    lastUserChunkRef.current = "";
-
-    let session: RealtimeSessionResponse;
-    try {
-      const res = await apiClient.post<RealtimeSessionResponse>("/realtime/session", {
-        model: "gpt-4o-realtime-preview",
-        // Realtime voice list differs from TTS voices; use a supported preset.
-        voice: "alloy",
-      });
-      session = res.data;
-    } catch (e: unknown) {
-      const data = (e as { response?: { data?: unknown } })?.response?.data;
-      const details =
-        (data as { error?: { details?: string; message?: string; status?: number } })?.error?.details ??
-        (data as { error?: { details?: string; message?: string } })?.error?.message ??
-        "";
-      setError(
-        details
-          ? `Failed to create Realtime session: ${details}`
-          : "Failed to create Realtime session. Check backend OPENAI_API_KEY and OPENAI_BASE_URL.",
-      );
-      setStatus("error");
-      return;
-    }
-
-    setStatus("connecting");
-
-    try {
-      const pc = new RTCPeerConnection();
-      pcRef.current = pc;
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      localStreamRef.current = stream;
-      for (const track of stream.getTracks()) {
-        pc.addTrack(track, stream);
-      }
-
-      // Remote audio from the model
-      pc.ontrack = (e) => {
-        const [remoteStream] = e.streams;
-        if (!remoteAudioRef.current) return;
-        remoteAudioRef.current.srcObject = remoteStream;
-        remoteAudioRef.current.muted = !ttsEnabled;
-        remoteAudioRef.current
-          .play()
-          .catch(() => {
-            // Autoplay may require user gesture; user can unmute/play manually
-          });
-      };
-
-      const dc = pc.createDataChannel("oai-events");
-      dcRef.current = dc;
-
-      dc.onopen = () => {
-        appendLog("data_channel_open", {});
-        setStatus("connected");
-
-        introPhaseRef.current = "intro_sent";
-
-        // Phase 1: intro ONLY (no follow-up in same response)
-        const msg = {
-          type: "response.create",
-          response: {
-            modalities: ["audio", "text"],
-            instructions:
-              "Say ONLY this one sentence (verbatim) and then stop. Do not add any other words in any language:\n" +
-              `"${INTRO_TEXT}"`,
-          },
-        };
-        dc.send(JSON.stringify(msg));
-      };
-
-      dc.onmessage = (evt) => {
-        const parsed = typeof evt.data === "string" ? safeJsonParse(evt.data) : null;
-        if (!parsed || typeof parsed !== "object") return;
-
-        const p = parsed as Record<string, unknown>;
-        const type = String(p.type ?? "event");
-        appendLog(type, parsed);
-
-        // Best-effort extraction across possible event shapes.
-        // Realtime often emits both incremental deltas AND full transcript snapshots,
-        // which can cause duplicate text if we always append.
-        const textPiece =
-          (p.delta as unknown) ??
-          (p.text as unknown) ??
-          (p.transcript as unknown) ??
-          (p.output_text as unknown);
-
-        if (typeof textPiece === "string" && textPiece.length > 0) {
-          // Heuristic: user transcription vs assistant text
-          if (type.includes("input") || type.includes("transcription")) {
-            const chunk = textPiece;
-            if (chunk === lastUserChunkRef.current) return;
-            lastUserChunkRef.current = chunk;
-            setUserText((prev) => {
-              // If upstream sends a full snapshot, prefer replace instead of append.
-              if (chunk.startsWith(prev)) return chunk;
-              if (prev.endsWith(chunk)) return prev; // duplicate
-              return prev ? `${prev}${chunk}` : chunk;
-            });
-          } else if (type.includes("response") || type.includes("output")) {
-            const chunk = textPiece;
-            if (chunk === lastAssistantChunkRef.current) return;
-            lastAssistantChunkRef.current = chunk;
-            setAssistantText((prev) => {
-              if (chunk.startsWith(prev)) return chunk; // snapshot update
-              if (prev.endsWith(chunk)) return prev; // duplicate delta
-              return prev ? `${prev}${chunk}` : chunk;
-            });
-          }
-        }
-
-        // After the intro response completes, wait for the patient's first utterance
-        // before asking questions. If we ask immediately, the model may pick a random
-        // language because it hasn't heard the patient yet.
-        const isResponseDone =
-          type.includes("response") && (type.includes("done") || type.includes("completed"));
-
-        if (introPhaseRef.current === "intro_sent" && isResponseDone) {
-          introPhaseRef.current = "awaiting_user";
-        }
-
-        const isUserSpeech =
-          type.includes("input") && (type.includes("transcription") || type.includes("transcript"));
-
-        if (introPhaseRef.current === "awaiting_user" && isUserSpeech) {
-          introPhaseRef.current = "followup_sent";
-          const langLabel = language ? LANGUAGE_LABELS[language] ?? language : null;
-          const languageLine = langLabel
-            ? `- Reply in ${langLabel}. If the patient uses a different language, switch to that language instead.`
-            : "- Continue in the same language as the patient's most recent utterance.";
-          const followup = {
-            type: "response.create",
-            response: {
-              modalities: ["audio", "text"],
-              instructions:
-                "Now start the medical interview.\n" +
-                languageLine + "\n" +
-                "- If unsure about language, ask a short clarification question about language.\n" +
-                "- Ask ONE question at a time to understand symptoms.\n" +
-                "- When you have enough information, recommend appropriate medical tests and next steps.\n" +
-                "- If emergency symptoms are suspected, advise calling emergency services immediately.\n\n" +
-                "Ask your first question now.",
-            },
-          };
-          dc.send(JSON.stringify(followup));
-        }
-      };
-
-      dc.onerror = () => {
-        setError("Realtime connection error (data channel).");
-        setStatus("error");
-      };
-
-      pc.oniceconnectionstatechange = () => {
-        appendLog("ice_state", { state: pc.iceConnectionState });
-      };
-
-      // SDP offer/answer exchange with OpenAI Realtime
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      const sdpRes = await fetch(
-        `https://api.openai.com/v1/realtime?model=${encodeURIComponent(session.model)}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${session.client_secret}`,
-            "Content-Type": "application/sdp",
-          },
-          body: offer.sdp ?? "",
-        },
-      );
-
-      if (!sdpRes.ok) {
-        const t = await sdpRes.text();
-        throw new Error(`Realtime SDP exchange failed (${sdpRes.status}): ${t}`);
-      }
-
-      const answerSdp = await sdpRes.text();
-      await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
-    } catch (e: unknown) {
-      const message = (e as Error)?.message ?? "Failed to connect to Realtime voice.";
-      setError(message);
-      setStatus("error");
-      cleanup();
-    }
-  }, [appendLog, canUseWebRTC, cleanup, ttsEnabled, language]);
-
-  useEffect(() => {
-    return () => cleanup();
-  }, [cleanup]);
+  const showTyping = Boolean(assistantText);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              cleanup();
-              start();
-            }}
-            className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted/70"
-            disabled={status === "creating_session" || status === "connecting"}
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
+      {/* Blue header — reference */}
+      <div className="flex shrink-0 items-start justify-between gap-3 rounded-t-2xl bg-[#3B82F6] px-4 py-3 text-white">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15">
+            <MessageSquare className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold leading-tight">Conversation Transcript</h2>
+            <p className="text-xs text-blue-100/90">Real-time voice-to-text</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={exportTranscript}
+          className="shrink-0 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-white/25"
+        >
+          Export
+        </button>
+      </div>
+
+      {/* Thread */}
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/80 px-4 py-4 scrollbar-thin">
+        {thread.length === 0 && !assistantText && !userText && (
+          <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-[#3B82F6]">
+              <MessageSquare className="h-7 w-7" />
+            </div>
+            <p className="text-sm font-medium text-slate-700">No messages yet</p>
+            <p className="max-w-xs text-xs text-slate-500">
+              Use Start / Reconnect in the panel on the right. Your conversation will appear here.
+            </p>
+          </div>
+        )}
+
+        {thread.map((m) => (
+          <div
+            key={m.id}
+            className={`flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}
           >
-            <RefreshCcw className="h-3.5 w-3.5" />
-            Start / Reconnect
-          </button>
+            {m.role === "assistant" && (
+              <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#3B82F6] text-white shadow-sm">
+                <Bot className="h-4 w-4" />
+              </div>
+            )}
+            <div
+              className={`max-w-[min(100%,28rem)] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm ${
+                m.role === "user"
+                  ? "rounded-br-md bg-[#3B82F6] text-white"
+                  : "rounded-bl-md border border-slate-100 bg-white text-slate-800"
+              }`}
+            >
+              <p className="whitespace-pre-wrap">{m.content}</p>
+              <p
+                className={`mt-1.5 text-[11px] ${
+                  m.role === "user" ? "text-blue-100" : "text-slate-400"
+                }`}
+              >
+                {formatTime(m.ts)}
+              </p>
+            </div>
+            {m.role === "user" && (
+              <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600 ring-2 ring-white">
+                <User className="h-4 w-4" />
+              </div>
+            )}
+          </div>
+        ))}
+
+        {showTyping && (
+          <div className="flex gap-2 justify-start">
+            <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#3B82F6] text-white shadow-sm">
+              <Bot className="h-4 w-4" />
+            </div>
+            <div className="max-w-[min(100%,28rem)] rounded-2xl rounded-bl-md border border-slate-100 bg-white px-3.5 py-3 text-sm text-slate-700 shadow-sm">
+              <div className="mb-2 flex gap-1">
+                <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.2s]" />
+                <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.1s]" />
+                <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400" />
+              </div>
+              {assistantText ? (
+                <p className="whitespace-pre-wrap text-slate-800">{assistantText}</p>
+              ) : null}
+            </div>
+          </div>
+        )}
+
+        {userText && !assistantText ? (
+          <div className="flex gap-2 justify-end">
+            <div className="max-w-[min(100%,28rem)] rounded-2xl rounded-br-md bg-[#3B82F6] px-3.5 py-2.5 text-sm text-white shadow-sm">
+              <p className="whitespace-pre-wrap">{userText}</p>
+              <p className="mt-1.5 text-[11px] text-blue-100">Transcribing…</p>
+            </div>
+            <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600 ring-2 ring-white">
+              <User className="h-4 w-4" />
+            </div>
+          </div>
+        ) : null}
+
+        <div ref={threadEndRef} />
+      </div>
+
+      {/* Footer strip */}
+      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3">
+        <p className="text-xs text-slate-500">Voice input active — speak naturally…</p>
+        <div className="flex items-center gap-2 text-xs font-medium text-slate-700">
+          {isSessionActive && status === "connected" ? (
+            <>
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+              </span>
+              Listening
+            </>
+          ) : status === "connecting" || status === "creating_session" ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#3B82F6]" />
+              Connecting
+            </>
+          ) : (
+            <span className="text-slate-400">Idle</span>
+          )}
+        </div>
+      </div>
+
+      {error && (
+        <div className="shrink-0 border-t border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function VoiceControlsPanel({ voice }: Props) {
+  const {
+    status,
+    cleanup,
+    restart,
+    ttsEnabled,
+    setTtsEnabled,
+    volume,
+    setVolume,
+    playbackRate,
+    setPlaybackRate,
+    remoteAudioRef,
+    exportTranscript,
+    isSessionActive,
+    canUseWebRTC,
+    logs,
+    generateLabReportAndDownload,
+    labReportLoading,
+    labReportError,
+  } = voice;
+
+  const busy = status === "creating_session" || status === "connecting";
+
+  return (
+    <div className="flex flex-col gap-4">
+      <audio ref={remoteAudioRef} className="hidden" />
+
+      {/* Voice controls card */}
+      <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
+        <h3 className="mb-3 text-sm font-semibold text-slate-800">Voice</h3>
+
+        {isSessionActive ? (
           <button
             type="button"
             onClick={cleanup}
-            className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted/70"
+            className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700"
           >
-            <Square className="h-3.5 w-3.5" />
+            <Square className="h-4 w-4 fill-current" />
             Stop
           </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void restart()}
+            disabled={!canUseWebRTC || busy}
+            className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {busy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCcw className="h-4 w-4" />
+            )}
+            Start / Reconnect
+          </button>
+        )}
+
+        <div className="space-y-3 border-t border-slate-100 pt-4">
+          <div>
+            <div className="mb-1.5 flex justify-between text-xs font-medium text-slate-600">
+              <span>Volume</span>
+              <span>{Math.round(volume * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={volume}
+              onChange={(e) => setVolume(Number(e.target.value))}
+              className="h-2 w-full cursor-pointer accent-[#3B82F6]"
+            />
+          </div>
+          <div>
+            <div className="mb-1.5 flex justify-between text-xs font-medium text-slate-600">
+              <span>Speech speed</span>
+              <span>{playbackRate.toFixed(1)}×</span>
+            </div>
+            <input
+              type="range"
+              min={0.75}
+              max={1.5}
+              step={0.05}
+              value={playbackRate}
+              onChange={(e) => setPlaybackRate(Number(e.target.value))}
+              className="h-2 w-full cursor-pointer accent-[#3B82F6]"
+            />
+          </div>
         </div>
 
         <button
           type="button"
           onClick={() => setTtsEnabled((v) => !v)}
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-            ttsEnabled
-              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-              : "bg-muted text-muted-foreground"
-          }`}
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
         >
-          {ttsEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-          {ttsEnabled ? "Audio On" : "Audio Off"}
+          {ttsEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+          {ttsEnabled ? "Mute audio" : "Unmute audio"}
         </button>
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-4">
-        <div className="flex items-center gap-2 text-sm">
-          <Mic className="h-4 w-4 text-muted-foreground" />
-          <span className="font-medium text-foreground">Realtime voice</span>
-          <span className="text-muted-foreground">({status})</span>
-          {(status === "creating_session" || status === "connecting") && (
-            <Loader2 className="ml-auto h-4 w-4 animate-spin text-muted-foreground" />
-          )}
+      {/* Quick actions */}
+      <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
+        <h3 className="mb-3 text-sm font-semibold text-slate-800">Quick actions</h3>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => void generateLabReportAndDownload()}
+            disabled={labReportLoading}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-60"
+          >
+            {labReportLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+            ) : (
+              <Download className="h-4 w-4 text-slate-500" />
+            )}
+            Download lab test
+          </button>
+          {labReportError ? (
+            <p className="rounded-lg bg-red-50 px-2 py-1.5 text-xs text-red-700">{labReportError}</p>
+          ) : null}
+          <button
+            type="button"
+            onClick={exportTranscript}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            <Download className="h-4 w-4 text-slate-500" />
+            Export transcript
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard?.writeText(window.location.href).catch(() => {});
+            }}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            <Share2 className="h-4 w-4 text-slate-500" />
+            Share session
+          </button>
         </div>
-        <audio ref={remoteAudioRef} className="mt-2 w-full" controls />
-        <p className="mt-2 text-xs text-muted-foreground">
-          Tip: If you don’t hear audio, click play on the audio control (browser autoplay policy).
-        </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-lg border border-border bg-card p-4">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">You (transcript)</p>
-          <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{userText || "—"}</p>
-        </div>
-        <div className="rounded-lg border border-border bg-card p-4">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Assistant</p>
-          <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{assistantText || "—"}</p>
-        </div>
-      </div>
-
-      {error && (
-        <div className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>
-      )}
-
-      <details className="rounded-lg border border-border bg-card p-4">
-        <summary className="cursor-pointer text-sm font-medium text-foreground">Debug events</summary>
-        <div className="mt-3 max-h-[280px] overflow-auto space-y-2">
+      <details className="rounded-xl border border-slate-200 bg-slate-50/80">
+        <summary className="cursor-pointer px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          Debug events
+        </summary>
+        <div className="max-h-[140px] space-y-2 overflow-auto px-2 pb-2">
           {logs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No events yet.</p>
+            <p className="px-1 py-2 text-xs text-slate-500">No events yet.</p>
           ) : (
             logs
               .slice()
               .reverse()
               .map((l) => (
-                <div key={l.id} className="rounded-md border border-border bg-muted/20 p-3">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <div key={l.id} className="rounded-lg border border-slate-200 bg-white p-2">
+                  <div className="flex justify-between text-[10px] text-slate-500">
                     <span>{l.type}</span>
                     <span>{l.ts.toLocaleTimeString()}</span>
                   </div>
-                  <pre className="mt-2 whitespace-pre-wrap text-xs text-foreground">
+                  <pre className="mt-1 max-h-16 overflow-auto whitespace-pre-wrap text-[10px] text-slate-600">
                     {JSON.stringify(l.data, null, 2)}
                   </pre>
                 </div>
@@ -402,3 +338,13 @@ export default function VoiceRealtime({ language }: VoiceRealtimeProps = {}) {
   );
 }
 
+/** @deprecated Use `useVoiceRealtime` with `VoiceTranscriptPanel` and `VoiceControlsPanel` on the page layout. */
+export default function VoiceRealtime() {
+  const voice = useVoiceRealtime();
+  return (
+    <div className="flex min-h-[420px] flex-col gap-4">
+      <VoiceTranscriptPanel voice={voice} />
+      <VoiceControlsPanel voice={voice} />
+    </div>
+  );
+}
