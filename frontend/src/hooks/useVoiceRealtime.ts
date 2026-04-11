@@ -8,6 +8,8 @@ type RealtimeSessionResponse = {
   voice: string;
   expires_at?: number | string | null;
   client_secret: string;
+  listening_profile?: string;
+  noise_reduction?: string;
 };
 
 export type VoiceLogItem = { id: string; ts: Date; type: string; data: unknown };
@@ -40,6 +42,85 @@ export const INTRO_TEXT =
 
 const LAB_TOOL_NAME = "request_lab_recommendations";
 
+/** Realtime TTS voices to compare (OpenAI); session uses `voice` from session create. */
+export const REALTIME_VOICE_OPTIONS = [
+  { value: "marin", label: "Marin" },
+  { value: "cedar", label: "Cedar" },
+  { value: "alloy", label: "Alloy" },
+  { value: "echo", label: "Echo" },
+  { value: "shimmer", label: "Shimmer" },
+] as const;
+
+export type ListeningProfile = "quiet" | "noisy" | "speaker";
+
+export const LISTENING_PROFILE_OPTIONS: {
+  value: ListeningProfile;
+  label: string;
+  hint: string;
+}[] = [
+  { value: "quiet", label: "Quiet room", hint: "Headset, earbuds, or phone close to mouth" },
+  { value: "noisy", label: "Noisy place", hint: "Hospital, TV, fan, waiting area, street" },
+  { value: "speaker", label: "Laptop / room mic", hint: "Built-in mic or farther from you" },
+];
+
+/** Match backend LISTENING_PROFILES — interrupt off for closing message only. */
+const CLOSING_TURN_DETECTION: Record<ListeningProfile, Record<string, unknown>> = {
+  quiet: {
+    type: "server_vad",
+    threshold: 0.58,
+    prefix_padding_ms: 300,
+    silence_duration_ms: 550,
+    create_response: true,
+    interrupt_response: false,
+  },
+  noisy: {
+    type: "server_vad",
+    threshold: 0.72,
+    prefix_padding_ms: 320,
+    silence_duration_ms: 850,
+    create_response: true,
+    interrupt_response: false,
+  },
+  speaker: {
+    type: "server_vad",
+    threshold: 0.68,
+    prefix_padding_ms: 350,
+    silence_duration_ms: 750,
+    create_response: true,
+    interrupt_response: false,
+  },
+};
+
+function defaultRealtimeModel() {
+  return (
+    (typeof process !== "undefined" && process.env.NEXT_PUBLIC_OPENAI_REALTIME_MODEL) || "gpt-realtime"
+  );
+}
+
+function defaultRealtimeVoice() {
+  return (
+    (typeof process !== "undefined" && process.env.NEXT_PUBLIC_OPENAI_REALTIME_VOICE) || "marin"
+  );
+}
+
+function defaultListeningProfile(): ListeningProfile {
+  const v = (typeof process !== "undefined" && process.env.NEXT_PUBLIC_LISTENING_PROFILE) || "quiet";
+  if (v === "noisy" || v === "speaker") return v;
+  return "quiet";
+}
+
+/** Softer turn-taking for final goodbye: no interrupt on spurious VAD (same profile thresholds). */
+function sendClosingSessionUpdate(dc: RTCDataChannel, profile: ListeningProfile) {
+  dc.send(
+    JSON.stringify({
+      type: "session.update",
+      session: {
+        turn_detection: CLOSING_TURN_DETECTION[profile],
+      },
+    }),
+  );
+}
+
 function downloadMarkdownFile(content: string, filename: string) {
   const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -63,6 +144,13 @@ export function useVoiceRealtime() {
   const [labReport, setLabReport] = useState<string | null>(null);
   const [labReportLoading, setLabReportLoading] = useState(false);
   const [labReportError, setLabReportError] = useState<string | null>(null);
+  const [realtimeVoice, setRealtimeVoice] = useState<string>(defaultRealtimeVoice);
+  const [listeningProfile, setListeningProfile] = useState<ListeningProfile>(defaultListeningProfile);
+  const [noisyEnvironmentHint, setNoisyEnvironmentHint] = useState(false);
+  const [lastSessionAudioDebug, setLastSessionAudioDebug] = useState<{
+    listening_profile: string;
+    noise_reduction?: string;
+  } | null>(null);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -78,6 +166,12 @@ export function useVoiceRealtime() {
   const ttsEnabledRef = useRef(ttsEnabled);
   const awaitingLabClosureRef = useRef(false);
   const cleanupRef = useRef<() => void>(() => {});
+  /** True after user speech_started while awaiting first turn (avoids noise-only speech_stopped). */
+  const hadSpeechWhileAwaitingRef = useRef(false);
+  const labClosureCleanupTimerRef = useRef<number | null>(null);
+  const interruptDebounceTimerRef = useRef<number | null>(null);
+  const lastSpeechStartedAtRef = useRef<number>(0);
+  const noisyHintClearTimerRef = useRef<number | null>(null);
 
   const canUseWebRTC = useMemo(() => {
     if (typeof window === "undefined") return false;
@@ -119,8 +213,27 @@ export function useVoiceRealtime() {
     el.playbackRate = playbackRate;
   }, [ttsEnabled, volume, playbackRate, status]);
 
+  const clearInterruptDebounce = useCallback(() => {
+    if (interruptDebounceTimerRef.current !== null) {
+      window.clearTimeout(interruptDebounceTimerRef.current);
+      interruptDebounceTimerRef.current = null;
+    }
+  }, []);
+
   const cleanup = useCallback(() => {
+    clearInterruptDebounce();
+    if (labClosureCleanupTimerRef.current) {
+      window.clearTimeout(labClosureCleanupTimerRef.current);
+      labClosureCleanupTimerRef.current = null;
+    }
+    if (noisyHintClearTimerRef.current) {
+      window.clearTimeout(noisyHintClearTimerRef.current);
+      noisyHintClearTimerRef.current = null;
+    }
     awaitingLabClosureRef.current = false;
+    hadSpeechWhileAwaitingRef.current = false;
+    setNoisyEnvironmentHint(false);
+    setLastSessionAudioDebug(null);
     setStatus("idle");
     setError(null);
     setLabReport(null);
@@ -149,7 +262,7 @@ export function useVoiceRealtime() {
     localStreamRef.current = null;
 
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
-  }, []);
+  }, [clearInterruptDebounce]);
 
   useEffect(() => {
     cleanupRef.current = cleanup;
@@ -205,7 +318,19 @@ export function useVoiceRealtime() {
     setLabReport(null);
     setLabReportError(null);
     setLabReportLoading(false);
+    clearInterruptDebounce();
+    if (labClosureCleanupTimerRef.current) {
+      window.clearTimeout(labClosureCleanupTimerRef.current);
+      labClosureCleanupTimerRef.current = null;
+    }
+    if (noisyHintClearTimerRef.current) {
+      window.clearTimeout(noisyHintClearTimerRef.current);
+      noisyHintClearTimerRef.current = null;
+    }
     awaitingLabClosureRef.current = false;
+    hadSpeechWhileAwaitingRef.current = false;
+    setNoisyEnvironmentHint(false);
+    setLastSessionAudioDebug(null);
     setStatus("creating_session");
     introPhaseRef.current = "idle";
     lastAssistantChunkRef.current = "";
@@ -260,20 +385,25 @@ export function useVoiceRealtime() {
           }),
         );
         awaitingLabClosureRef.current = true;
-        dc.send(
-          JSON.stringify({
-            type: "response.create",
-            response: {
-              modalities: ["audio", "text"],
-              instructions:
-                "The tool output JSON contains lab_recommendations_markdown. " +
-                "Explain the suggested lab tests clearly in the patient's language. " +
-                "Emphasize they are not a diagnosis and must be reviewed with a licensed clinician. " +
-                "Tell them they can download the full lab test list using the Download lab test button. " +
-                "Thank them warmly, state that this session is now complete, and do not ask any further questions.",
-            },
-          }),
-        );
+        sendClosingSessionUpdate(dc, listeningProfile);
+        window.setTimeout(() => {
+          if (dc.readyState !== "open") return;
+          dc.send(
+            JSON.stringify({
+              type: "response.create",
+              response: {
+                modalities: ["audio", "text"],
+                instructions:
+                  "The tool output JSON contains lab_recommendations_markdown. " +
+                  "Explain the suggested lab tests clearly in the patient's language. " +
+                  "Emphasize they are not a diagnosis and must be reviewed with a licensed clinician. " +
+                  "Tell them they can download the full lab test list using the Download lab test button. " +
+                  "Thank them warmly, state that this session is now complete, and do not ask any further questions. " +
+                  "Speak at a calm pace and finish every sentence fully before stopping.",
+              },
+            }),
+          );
+        }, 100);
       } catch (e: unknown) {
         const data = (e as { response?: { data?: { error?: { message?: string } } } })?.response?.data;
         const msg = data?.error?.message ?? (e as Error)?.message ?? "Lab report generation failed.";
@@ -289,16 +419,21 @@ export function useVoiceRealtime() {
           }),
         );
         awaitingLabClosureRef.current = true;
-        dc.send(
-          JSON.stringify({
-            type: "response.create",
-            response: {
-              modalities: ["audio", "text"],
-              instructions:
-                "The lab recommendation service failed. Apologize briefly, suggest the patient use Download lab test or speak with their clinician, thank them, and end the session without further questions.",
-            },
-          }),
-        );
+        sendClosingSessionUpdate(dc, listeningProfile);
+        window.setTimeout(() => {
+          if (dc.readyState !== "open") return;
+          dc.send(
+            JSON.stringify({
+              type: "response.create",
+              response: {
+                modalities: ["audio", "text"],
+                instructions:
+                  "The lab recommendation service failed. Apologize briefly, suggest the patient use Download lab test or speak with their clinician, thank them, and end the session without further questions. " +
+                  "Finish your last sentence completely at a calm pace.",
+              },
+            }),
+          );
+        }, 100);
       } finally {
         setLabReportLoading(false);
       }
@@ -307,10 +442,20 @@ export function useVoiceRealtime() {
     let session: RealtimeSessionResponse;
     try {
       const res = await apiClient.post<RealtimeSessionResponse>("/realtime/session", {
-        model: "gpt-4o-realtime-preview",
-        voice: "alloy",
+        model: defaultRealtimeModel(),
+        voice: realtimeVoice,
+        listening_profile: listeningProfile,
       });
       session = res.data;
+      const prof = session.listening_profile ?? listeningProfile;
+      const nr = session.noise_reduction;
+      setLastSessionAudioDebug({ listening_profile: prof, noise_reduction: nr });
+      appendLog("voice_session_audio", {
+        listening_profile: prof,
+        noise_reduction: nr,
+        model: session.model,
+        voice: session.voice,
+      });
     } catch (e: unknown) {
       const data = (e as { response?: { data?: unknown } })?.response?.data;
       const details =
@@ -332,7 +477,14 @@ export function useVoiceRealtime() {
       const pc = new RTCPeerConnection();
       pcRef.current = pc;
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
       localStreamRef.current = stream;
       for (const track of stream.getTracks()) {
         pc.addTrack(track, stream);
@@ -360,7 +512,8 @@ export function useVoiceRealtime() {
           response: {
             modalities: ["audio", "text"],
             instructions:
-              "Say ONLY this one sentence (verbatim) and then stop. Do not add any other words in any language:\n" +
+              "Say ONLY this one sentence (verbatim) and then stop. Speak in a warm, natural tone—not robotic. " +
+              "Do not add any other words in any language:\n" +
               `"${INTRO_TEXT}"`,
           },
         };
@@ -374,6 +527,61 @@ export function useVoiceRealtime() {
         const p = parsed as Record<string, unknown>;
         const type = String(p.type ?? "event");
         appendLog(type, parsed);
+
+        if (type === "input_audio_buffer.speech_started") {
+          // Final goodbye: do not clip tail audio (see awaitingLabClosureRef).
+          if (awaitingLabClosureRef.current) {
+            return;
+          }
+          lastSpeechStartedAtRef.current = Date.now();
+          appendLog("vad_speech_started", { listening_profile: listeningProfile });
+          const delayMs =
+            listeningProfile === "noisy" ? 200 : listeningProfile === "speaker" ? 165 : 120;
+          clearInterruptDebounce();
+          interruptDebounceTimerRef.current = window.setTimeout(() => {
+            interruptDebounceTimerRef.current = null;
+            if (awaitingLabClosureRef.current) return;
+            appendLog("interrupt_after_debounce", { delayMs });
+            if (introPhaseRef.current === "awaiting_user") {
+              hadSpeechWhileAwaitingRef.current = true;
+            }
+            const a = remoteAudioRef.current;
+            if (a) {
+              a.pause();
+              a.currentTime = 0;
+            }
+            try {
+              dc.send(JSON.stringify({ type: "response.cancel" }));
+            } catch {
+              // ignore
+            }
+          }, delayMs) as number;
+        }
+
+        if (type === "input_audio_buffer.speech_stopped") {
+          clearInterruptDebounce();
+          appendLog("vad_speech_stopped", { listening_profile: listeningProfile });
+          const burstMs = Date.now() - lastSpeechStartedAtRef.current;
+          if (burstMs > 0 && burstMs < 260) {
+            setNoisyEnvironmentHint(true);
+            appendLog("noise_burst_suspected", { burstMs });
+            if (noisyHintClearTimerRef.current) {
+              window.clearTimeout(noisyHintClearTimerRef.current);
+            }
+            noisyHintClearTimerRef.current = window.setTimeout(() => {
+              noisyHintClearTimerRef.current = null;
+              setNoisyEnvironmentHint(false);
+            }, 12000) as number;
+          }
+          remoteAudioRef.current?.play().catch(() => {});
+          // Enter interview phase after real speech: debounced interrupt fired, or utterance long enough.
+          if (introPhaseRef.current === "awaiting_user") {
+            if (hadSpeechWhileAwaitingRef.current || burstMs >= 100) {
+              introPhaseRef.current = "followup_sent";
+              hadSpeechWhileAwaitingRef.current = false;
+            }
+          }
+        }
 
         const textPiece =
           (p.delta as unknown) ??
@@ -422,29 +630,6 @@ export function useVoiceRealtime() {
           assistantTextRef.current = "";
           lastAssistantChunkRef.current = "";
           return;
-        }
-
-        const isUserSpeech =
-          type.includes("input") && (type.includes("transcription") || type.includes("transcript"));
-
-        if (introPhaseRef.current === "awaiting_user" && isUserSpeech) {
-          introPhaseRef.current = "followup_sent";
-          const followup = {
-            type: "response.create",
-            response: {
-              modalities: ["audio", "text"],
-              instructions:
-                "Now start the medical interview.\n" +
-                "- Continue in the same language as the patient's most recent utterance.\n" +
-                "- If unsure, ask a short clarification question about language.\n" +
-                "- Ask ONE question at a time about symptoms, timing, severity, and relevant history.\n" +
-                "- When you have enough information, call the function request_lab_recommendations with a detailed symptoms_summary.\n" +
-                "- After you receive lab_recommendations_markdown from the tool, explain suggestions briefly, mention Download lab test for the downloadable list, thank the patient, say the session is complete, and ask no further questions.\n" +
-                "- If emergency symptoms are suspected, advise emergency services immediately before the tool.\n\n" +
-                "Ask your first question now.",
-            },
-          };
-          dc.send(JSON.stringify(followup));
         }
 
         if (isMainResponseDone && introPhaseRef.current === "followup_sent") {
@@ -521,8 +706,15 @@ export function useVoiceRealtime() {
           const hasFn =
             Array.isArray(output) && output.some((it) => it && it.type === "function_call");
           if (!hasFn) {
-            awaitingLabClosureRef.current = false;
-            window.setTimeout(() => cleanupRef.current(), 4500);
+            // Keep awaitingLabClosureRef true until cleanup so speech_started does not clip tail audio.
+            if (labClosureCleanupTimerRef.current) {
+              window.clearTimeout(labClosureCleanupTimerRef.current);
+            }
+            labClosureCleanupTimerRef.current = window.setTimeout(() => {
+              labClosureCleanupTimerRef.current = null;
+              awaitingLabClosureRef.current = false;
+              cleanupRef.current();
+            }, 22000) as number;
           }
         }
       };
@@ -564,7 +756,7 @@ export function useVoiceRealtime() {
       setStatus("error");
       cleanup();
     }
-  }, [appendLog, canUseWebRTC, cleanup]);
+  }, [appendLog, canUseWebRTC, cleanup, clearInterruptDebounce, listeningProfile, realtimeVoice]);
 
   useEffect(() => {
     return () => cleanup();
@@ -632,6 +824,14 @@ export function useVoiceRealtime() {
     labReportLoading,
     labReportError,
     generateLabReportAndDownload,
+    realtimeVoice,
+    setRealtimeVoice,
+    realtimeVoiceOptions: REALTIME_VOICE_OPTIONS,
+    listeningProfile,
+    setListeningProfile,
+    listeningProfileOptions: LISTENING_PROFILE_OPTIONS,
+    noisyEnvironmentHint,
+    lastSessionAudioDebug,
   };
 }
 

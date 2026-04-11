@@ -19,6 +19,45 @@ from app.services.lab_recommendation_service import generate_lab_report_markdown
 
 bp = Blueprint("realtime", __name__, url_prefix="/api/v1/realtime")
 
+LISTENING_PROFILES: dict[str, dict[str, Any]] = {
+    # Calm room: headset / close mic — balanced VAD
+    "quiet": {
+        "noise_reduction_type": "near_field",
+        "turn_detection": {
+            "type": "server_vad",
+            "threshold": 0.58,
+            "prefix_padding_ms": 300,
+            "silence_duration_ms": 550,
+            "create_response": True,
+            "interrupt_response": True,
+        },
+    },
+    # Hospital, TV, fan, street — stricter VAD, more patience before end-of-turn
+    "noisy": {
+        "noise_reduction_type": "near_field",
+        "turn_detection": {
+            "type": "server_vad",
+            "threshold": 0.72,
+            "prefix_padding_ms": 320,
+            "silence_duration_ms": 850,
+            "create_response": True,
+            "interrupt_response": True,
+        },
+    },
+    # Laptop / room mic / farther from mic
+    "speaker": {
+        "noise_reduction_type": "far_field",
+        "turn_detection": {
+            "type": "server_vad",
+            "threshold": 0.68,
+            "prefix_padding_ms": 350,
+            "silence_duration_ms": 750,
+            "create_response": True,
+            "interrupt_response": True,
+        },
+    },
+}
+
 REQUEST_LAB_TOOL: dict[str, Any] = {
     "type": "function",
     "name": "request_lab_recommendations",
@@ -64,9 +103,15 @@ def create_realtime_session():
         return jsonify({"error": {"code": "CONFIG_ERROR", "message": "OPENAI_API_KEY not configured"}}), 500
 
     body: dict[str, Any] = request.get_json(silent=True) or {}
-    model = body.get("model") or os.getenv("OPENAI_REALTIME_MODEL", "gpt-4o-realtime-preview")
-    # Realtime voice list differs from classic TTS voices; default to a safe supported preset.
-    voice = body.get("voice") or os.getenv("OPENAI_REALTIME_VOICE", "alloy")
+    model = body.get("model") or os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime")
+    # Voices to try: alloy, echo, shimmer, marin, cedar (OpenAI Realtime)
+    voice = body.get("voice") or os.getenv("OPENAI_REALTIME_VOICE", "marin")
+    listening_profile = (body.get("listening_profile") or os.getenv("OPENAI_LISTENING_PROFILE") or "quiet").strip().lower()
+    if listening_profile not in LISTENING_PROFILES:
+        listening_profile = "quiet"
+    profile_cfg = LISTENING_PROFILES[listening_profile]
+    noise_type = profile_cfg["noise_reduction_type"]
+    profile_turn = dict(profile_cfg["turn_detection"])
 
     # Keep identity for server-side logs/authorization decisions only
     _patient_id = get_jwt_identity()
@@ -75,6 +120,11 @@ def create_realtime_session():
     # a dedicated intro-only response on connect to avoid mixed-language followups
     # being appended to the greeting.
     instructions = body.get("instructions") or (
+        "Voice and pacing:\n"
+        "- Speak naturally, like a calm clinician—not robotic or overly formal.\n"
+        "- Use short, clear sentences. Pause briefly before important medical points.\n"
+        "- Do not answer until the patient has clearly finished their turn; tolerate natural pauses.\n"
+        "- Ask one question at a time.\n\n"
         "You are Med Assist virtual doctor conducting a voice-based symptom assessment.\n"
         "When the patient starts speaking, detect the patient's spoken language and continue in that language.\n"
         "If you are unsure of the language, ask a short clarification question.\n\n"
@@ -89,6 +139,21 @@ def create_realtime_session():
         "If emergency symptoms are suspected, advise calling emergency services immediately before anything else."
     )
 
+    # Client may override full turn_detection; else use profile (server_vad + tuned for noise).
+    turn_detection: dict[str, Any] = dict(body.get("turn_detection") or profile_turn)
+
+    # POST /v1/realtime/sessions accepts top-level turn_detection + input_audio_noise_reduction
+    # (not nested "audio", which is response-only on some API versions / gateways).
+    input_audio_noise_reduction: dict[str, Any] = {"type": noise_type}
+    if isinstance(body.get("audio_input"), dict):
+        ai = body["audio_input"]
+        if isinstance(ai.get("turn_detection"), dict):
+            turn_detection = dict(ai["turn_detection"])
+        if isinstance(ai.get("noise_reduction"), dict):
+            input_audio_noise_reduction = dict(ai["noise_reduction"])
+    if isinstance(body.get("input_audio_noise_reduction"), dict):
+        input_audio_noise_reduction = dict(body["input_audio_noise_reduction"])
+
     payload = {
         "model": model,
         "voice": voice,
@@ -100,6 +165,8 @@ def create_realtime_session():
         "output_audio_format": body.get("output_audio_format", "pcm16"),
         # Optional client-side transcription via the realtime service if supported
         "input_audio_transcription": body.get("input_audio_transcription", {"model": "gpt-4o-mini-transcribe"}),
+        "turn_detection": turn_detection,
+        "input_audio_noise_reduction": input_audio_noise_reduction,
     }
 
     try:
@@ -134,6 +201,8 @@ def create_realtime_session():
     return jsonify({
         "model": model,
         "voice": voice,
+        "listening_profile": listening_profile,
+        "noise_reduction": noise_type,
         "expires_at": data.get("expires_at"),
         "client_secret": client_secret,
     }), 201

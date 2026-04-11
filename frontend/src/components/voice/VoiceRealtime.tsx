@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AlertTriangle,
   Bot,
   Download,
   Loader2,
@@ -30,7 +31,14 @@ export function VoiceTranscriptPanel({ voice }: Props) {
     error,
     isSessionActive,
     status,
+    noisyEnvironmentHint,
+    listeningProfile,
+    listeningProfileOptions,
+    lastSessionAudioDebug,
   } = voice;
+
+  const profileLabel =
+    listeningProfileOptions.find((o) => o.value === listeningProfile)?.label ?? listeningProfile;
 
   const showTyping = Boolean(assistantText);
 
@@ -56,6 +64,19 @@ export function VoiceTranscriptPanel({ voice }: Props) {
         </button>
       </div>
 
+      {noisyEnvironmentHint ? (
+        <div className="flex shrink-0 items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-950">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <div>
+            <p className="font-semibold text-amber-900">Background noise detected</p>
+            <p className="mt-0.5 text-amber-800/90">
+              For clearer results use earphones/headset, move closer to the microphone, or switch to{" "}
+              <strong>Noisy place</strong> mode on the right. In loud areas, speak in short phrases.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {/* Thread */}
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/80 px-4 py-4 scrollbar-thin">
         {thread.length === 0 && !assistantText && !userText && (
@@ -65,7 +86,7 @@ export function VoiceTranscriptPanel({ voice }: Props) {
             </div>
             <p className="text-sm font-medium text-slate-700">No messages yet</p>
             <p className="max-w-xs text-xs text-slate-500">
-              Use Start / Reconnect in the panel on the right. Your conversation will appear here.
+              Use Start / Reconnect in the panel on the right. Earphones and a quiet room improve accuracy.
             </p>
           </div>
         )}
@@ -138,8 +159,13 @@ export function VoiceTranscriptPanel({ voice }: Props) {
       </div>
 
       {/* Footer strip */}
-      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3">
+      <div className="flex shrink-0 flex-col gap-1 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <p className="text-xs text-slate-500">Voice input active — speak naturally…</p>
+        {lastSessionAudioDebug ? (
+          <p className="text-[10px] text-slate-400">
+            Audio: {lastSessionAudioDebug.noise_reduction ?? "—"} noise reduction · {profileLabel}
+          </p>
+        ) : null}
         <div className="flex items-center gap-2 text-xs font-medium text-slate-700">
           {isSessionActive && status === "connected" ? (
             <>
@@ -188,6 +214,12 @@ export function VoiceControlsPanel({ voice }: Props) {
     generateLabReportAndDownload,
     labReportLoading,
     labReportError,
+    realtimeVoice,
+    setRealtimeVoice,
+    realtimeVoiceOptions,
+    listeningProfile,
+    setListeningProfile,
+    listeningProfileOptions,
   } = voice;
 
   const busy = status === "creating_session" || status === "connecting";
@@ -199,6 +231,44 @@ export function VoiceControlsPanel({ voice }: Props) {
       {/* Voice controls card */}
       <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
         <h3 className="mb-3 text-sm font-semibold text-slate-800">Voice</h3>
+
+        <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="realtime-voice">
+          Assistant voice
+        </label>
+        <select
+          id="realtime-voice"
+          value={realtimeVoice}
+          onChange={(e) => setRealtimeVoice(e.target.value)}
+          disabled={isSessionActive}
+          className="mb-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#3B82F6]/40 focus:ring-2 focus:ring-blue-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {realtimeVoiceOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <p className="mb-4 text-[11px] text-slate-500">Takes effect after Start / Reconnect.</p>
+
+        <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor="listening-profile">
+          Listening environment
+        </label>
+        <select
+          id="listening-profile"
+          value={listeningProfile}
+          onChange={(e) => setListeningProfile(e.target.value as (typeof listeningProfileOptions)[number]["value"])}
+          disabled={isSessionActive}
+          className="mb-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#3B82F6]/40 focus:ring-2 focus:ring-blue-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {listeningProfileOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <p className="mb-4 text-[11px] leading-snug text-slate-500">
+          {listeningProfileOptions.find((o) => o.value === listeningProfile)?.hint}
+        </p>
 
         {isSessionActive ? (
           <button
