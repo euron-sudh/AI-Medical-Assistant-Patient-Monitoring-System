@@ -19,18 +19,37 @@ OPENAI_TTS_MODEL = os.getenv("OPENAI_TTS_MODEL", "tts-1")
 class VoiceService:
     """Handles speech-to-text transcription and text-to-speech synthesis."""
 
-    def transcribe(self, audio_data: bytes, filename: str = "audio.wav") -> TranscribeResponse:
-        """Transcribe audio to text using OpenAI Whisper API."""
+    def transcribe(
+        self,
+        audio_data: bytes,
+        filename: str = "audio.wav",
+        language: str | None = None,
+    ) -> TranscribeResponse:
+        """Transcribe audio to text using OpenAI Whisper API.
+
+        Args:
+            audio_data: Raw audio bytes.
+            filename: Filename hint so Whisper can infer the container/codec.
+            language: Optional ISO-639-1 language hint (e.g. 'en', 'hi', 'es').
+                When omitted Whisper auto-detects the language.
+        """
         if OPENAI_API_KEY:
             try:
-                return self._transcribe_with_openai(audio_data, filename)
+                return self._transcribe_with_openai(audio_data, filename, language=language)
             except Exception as e:
                 logger.error("openai_transcription_failed", error=str(e))
                 raise ValueError(f"Transcription failed: {str(e)}")
-        logger.info("voice_transcribe_placeholder", filename=filename, audio_size=len(audio_data))
+        logger.info(
+            "voice_transcribe_placeholder",
+            filename=filename,
+            audio_size=len(audio_data),
+            language=language,
+        )
         return TranscribeResponse(
             text="[Placeholder] Audio transcription would appear here. Configure OPENAI_API_KEY to enable.",
-            language="en", duration_seconds=0.0, confidence=0.0,
+            language=language or "en",
+            duration_seconds=0.0,
+            confidence=0.0,
         )
 
     def synthesize(self, data: SynthesizeRequest) -> SynthesizeResponse:
@@ -47,18 +66,28 @@ class VoiceService:
             message="[Placeholder] Audio synthesis not available. Configure OPENAI_API_KEY to enable.",
         )
 
-    def _transcribe_with_openai(self, audio_data: bytes, filename: str) -> TranscribeResponse:
+    def _transcribe_with_openai(
+        self,
+        audio_data: bytes,
+        filename: str,
+        language: str | None = None,
+    ) -> TranscribeResponse:
         """Call OpenAI Whisper API for transcription."""
         from openai import OpenAI
         base_url = BaseConfig.OPENAI_BASE_URL or BaseConfig.EURI_BASE_URL
         client = OpenAI(api_key=OPENAI_API_KEY, base_url=base_url) if base_url else OpenAI(api_key=OPENAI_API_KEY)
         audio_file = BytesIO(audio_data)
         audio_file.name = filename
-        result = client.audio.transcriptions.create(
-            model=OPENAI_WHISPER_MODEL, file=audio_file, response_format="verbose_json",
-        )
+        kwargs = {
+            "model": OPENAI_WHISPER_MODEL,
+            "file": audio_file,
+            "response_format": "verbose_json",
+        }
+        if language:
+            kwargs["language"] = language
+        result = client.audio.transcriptions.create(**kwargs)
         return TranscribeResponse(
-            text=result.text, language=getattr(result, "language", None),
+            text=result.text, language=getattr(result, "language", language),
             duration_seconds=getattr(result, "duration", None), confidence=None,
         )
 

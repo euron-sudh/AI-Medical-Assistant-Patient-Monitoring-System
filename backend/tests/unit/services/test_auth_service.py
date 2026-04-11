@@ -27,19 +27,24 @@ class TestAuthServiceRegister:
         assert result.is_active is True
         assert result.is_verified is False
 
-    def test_register_new_doctor(self, db):
-        """Registering a new doctor creates user with doctor role."""
-        service = AuthService()
-        data = RegisterRequest(
-            email="newdoctor@test.com",
-            password="securepass123",
-            first_name="New",
-            last_name="Doctor",
-            role="doctor",
-        )
-        result = service.register(data)
+    def test_register_new_doctor_rejected(self, db):
+        """Public self-registration MUST NOT allow elevated roles.
 
-        assert result.role == "doctor"
+        The public /register endpoint is restricted to ``role='patient'`` to
+        prevent privilege escalation via unauthenticated signup. Doctor and
+        admin accounts must be provisioned through the admin panel.
+        """
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            RegisterRequest(
+                email="newdoctor@test.com",
+                password="securepass123",
+                first_name="New",
+                last_name="Doctor",
+                role="doctor",
+            )
 
     def test_register_duplicate_email_raises(self, db, sample_user):
         """Registering with an existing email raises ValueError."""
