@@ -1,45 +1,46 @@
 "use client";
 
-import { useMemo } from "react";
-import { Bell, FileText, Search, Video } from "lucide-react";
-import VoiceRealtime from "@/components/voice/VoiceRealtime";
-import { useAuth } from "@/hooks/useAuth";
+import { Bell, Bot, Search, Video } from "lucide-react";
+import {
+  VoiceControlsPanel,
+  VoiceTranscriptPanel,
+} from "@/components/voice/VoiceRealtime";
+import { useVoiceRealtime } from "@/hooks/useVoiceRealtime";
 
 function StatusPill() {
   return (
-    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+    <div className="flex items-center gap-2 text-xs text-slate-500">
       <span className="flex items-center gap-2">
         <span className="relative flex h-2 w-2">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
           <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
         </span>
-        Session Active
+        Online
       </span>
       <span>•</span>
-      <span>Realtime</span>
+      <span className="text-slate-400">Realtime voice</span>
     </div>
   );
 }
 
-function VoiceVisualizer() {
-  // lightweight CSS visualizer (no Plotly)
+function VoiceVisualizerLight() {
   return (
-    <div className="pointer-events-none absolute bottom-24 left-0 right-0 z-20 flex h-40 items-end justify-center gap-2 opacity-80">
-      {Array.from({ length: 18 }).map((_, i) => (
+    <div className="pointer-events-none flex h-16 items-end justify-center gap-1 opacity-90">
+      {Array.from({ length: 16 }).map((_, i) => (
         <div
           key={i}
-          className="w-1.5 rounded-full bg-sky-400/80"
+          className="w-1 rounded-full bg-[#3B82F6]/70"
           style={{
-            height: `${12 + ((i * 37) % 32)}px`,
-            animation: `voicePulse 0.${(i % 7) + 6}s ease-in-out infinite alternate`,
+            height: `${8 + ((i * 31) % 24)}px`,
+            animation: `voicePulseLight 0.${(i % 6) + 5}s ease-in-out infinite alternate`,
           }}
         />
       ))}
       <style jsx>{`
-        @keyframes voicePulse {
+        @keyframes voicePulseLight {
           from {
             transform: scaleY(0.35);
-            opacity: 0.55;
+            opacity: 0.45;
           }
           to {
             transform: scaleY(1);
@@ -52,17 +53,15 @@ function VoiceVisualizer() {
 }
 
 export default function AiAssistantPage() {
-  const { user } = useAuth();
-  const _patientId = user?.id ?? "";
+  const voice = useVoiceRealtime();
 
   return (
-    <div className="-m-8 h-[calc(100vh-4rem)] overflow-hidden bg-[#0F1115]">
-      {/* Main content wrapper styled like reference */}
-      <div className="relative flex h-full flex-col overflow-hidden rounded-l-[2rem] bg-slate-50 shadow-[-10px_0_30px_rgba(0,0,0,0.5)]">
-        {/* Header */}
-        <header className="z-20 flex h-20 items-center justify-between border-b border-slate-100 bg-white/60 px-8 backdrop-blur">
+    <div className="-m-8 flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-slate-100">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[2rem] border-l border-slate-200/80 bg-slate-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+        {/* Header — light */}
+        <header className="z-20 flex h-[4.5rem] shrink-0 items-center justify-between border-b border-slate-200/90 bg-white/90 px-6 backdrop-blur-md md:px-8">
           <div className="flex items-center gap-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sky-50 text-sky-600">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#3B82F6] text-white shadow-sm">
               <Video className="h-5 w-5" />
             </div>
             <div>
@@ -71,114 +70,86 @@ export default function AiAssistantPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="relative hidden w-64 md:block">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="relative hidden w-56 lg:block xl:w-64">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search medical terms..."
-                className="w-full rounded-full bg-slate-100/80 py-2 pl-9 pr-4 text-sm outline-none ring-0 focus:bg-white focus:ring-2 focus:ring-sky-500/20"
+                className="w-full rounded-full border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-[#3B82F6]/40 focus:bg-white focus:ring-2 focus:ring-blue-500/15"
               />
             </div>
-            <button className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:border-sky-200 hover:text-sky-600">
+            <button
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:border-slate-300 hover:text-[#3B82F6]"
+            >
               <Bell className="h-4 w-4" />
             </button>
-            <button className="rounded-lg border border-red-100 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100">
-              End Session
+            <button
+              type="button"
+              onClick={voice.cleanup}
+              className="rounded-xl border border-red-100 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100"
+            >
+              End session
             </button>
           </div>
         </header>
 
-        {/* Content */}
-        <div className="flex flex-1 gap-6 overflow-hidden p-6">
-          {/* Left: Avatar stage */}
-          <div className="group relative flex flex-1 flex-col overflow-hidden rounded-[24px] border border-slate-800/30 bg-[#0F1115] shadow-lg">
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-[#0F1115] to-black" />
-            <div
-              className="absolute inset-0 opacity-80 mix-blend-luminosity"
-              style={{
-                backgroundImage:
-                  "url('https://storage.googleapis.com/uxpilot-auth.appspot.com/843cfccd25-cb61b2ec80857f53f340.png')",
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-              }}
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-            <div className="absolute inset-0 bg-sky-500/10 mix-blend-overlay" />
-
-            {/* HUD */}
-            <div className="pointer-events-none absolute left-6 right-6 top-6 z-20 flex items-start justify-between">
-              <div className="pointer-events-auto rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur-xl">
-                <div className="flex items-center gap-3">
-                  <div className="relative flex h-8 w-8 items-center justify-center">
-                    <div className="absolute inset-0 rounded-full bg-sky-500/30 blur-sm" />
-                    <div className="h-3 w-3 rounded-full bg-sky-400 shadow-[0_0_10px_rgba(96,165,250,0.8)]" />
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-medium uppercase tracking-wider text-slate-300/70">
-                      System Status
-                    </div>
-                    <div className="text-sm font-semibold text-white">
-                      Always Listening <span className="text-slate-400">•</span> Dr. Sarah
+        {/* Three columns — reference layout */}
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 overflow-hidden p-5 lg:grid-cols-12 lg:gap-6 lg:p-6">
+          {/* Left — avatar & identity */}
+          <aside className="flex min-h-0 flex-col gap-4 lg:col-span-3 lg:overflow-y-auto">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
+              <div className="flex flex-col items-center text-center">
+                <div className="relative mb-5">
+                  <div className="absolute inset-0 scale-110 rounded-full bg-gradient-to-br from-blue-100/80 to-sky-100/40 blur-xl" />
+                  <div className="relative flex h-36 w-36 items-center justify-center rounded-full bg-gradient-to-br from-slate-50 to-blue-50 p-1 shadow-inner ring-4 ring-[#3B82F6]/15">
+                    <div className="flex h-full w-full items-center justify-center rounded-full bg-white shadow-sm">
+                      <Bot className="h-16 w-16 text-[#3B82F6]" strokeWidth={1.15} />
                     </div>
                   </div>
+                  <span
+                    className="absolute bottom-2 right-2 h-4 w-4 rounded-full border-[3px] border-white bg-emerald-500 shadow-sm"
+                    title="Online"
+                  />
                 </div>
-              </div>
 
-              <div className="pointer-events-auto rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-white backdrop-blur-xl">
-                Latency: ~ realtime
-              </div>
-            </div>
+                <h2 className="text-base font-bold text-slate-900">AI Medical Assistant</h2>
+                <p className="mt-1 text-sm text-slate-500">Specialized in General Medicine</p>
 
-            <VoiceVisualizer />
-
-            {/* Action */}
-            <div className="absolute bottom-8 right-8 z-30">
-              <button className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white shadow-lg backdrop-blur-xl transition-colors hover:bg-white/10">
-                <FileText className="h-4 w-4 text-sky-300" />
-                Generate Report
-              </button>
-            </div>
-          </div>
-
-          {/* Right: Realtime controls + History */}
-          <div className="flex w-80 flex-shrink-0 flex-col gap-6 overflow-y-auto pb-4">
-            <div className="rounded-[24px] border border-slate-100 bg-white p-4 shadow-sm">
-              <VoiceRealtime />
-            </div>
-
-            <div className="flex-1 rounded-[24px] border border-slate-100 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-800">Recent History</h3>
-                <button className="text-slate-400 hover:text-slate-600">•••</button>
-              </div>
-              <div className="relative mt-2 space-y-6 border-l-2 border-slate-100 pl-3">
-                <div className="relative">
-                  <div className="absolute -left-[19px] top-1 h-3 w-3 rounded-full border-2 border-white bg-sky-500" />
-                  <div className="mb-1 text-xs text-slate-400">Today</div>
-                  <div className="text-sm font-medium text-slate-800">Voice session</div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    AI is collecting symptoms and recommending tests.
-                  </div>
-                </div>
-                <div className="relative">
-                  <div className="absolute -left-[19px] top-1 h-3 w-3 rounded-full border-2 border-white bg-slate-300" />
-                  <div className="mb-1 text-xs text-slate-400">Last week</div>
-                  <div className="text-sm font-medium text-slate-800">Vitals upload</div>
-                  <div className="mt-1 text-xs text-slate-500">Monitoring data received from device.</div>
-                </div>
-                <div className="relative">
-                  <div className="absolute -left-[19px] top-1 h-3 w-3 rounded-full border-2 border-white bg-slate-300" />
-                  <div className="mb-1 text-xs text-slate-400">Last month</div>
-                  <div className="text-sm font-medium text-slate-800">Routine checkup</div>
-                  <div className="mt-1 text-xs text-slate-500">Follow-up recommended.</div>
+                <div className="mt-6 w-full">
+                  <VoiceVisualizerLight />
                 </div>
               </div>
             </div>
-          </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-3 shadow-sm">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-sky-700/80">
+                  Response time
+                </div>
+                <div className="text-xl font-bold text-sky-900">~24ms</div>
+              </div>
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-3 shadow-sm">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700/80">
+                  Accuracy
+                </div>
+                <div className="text-xl font-bold text-emerald-900">99.8%</div>
+              </div>
+            </div>
+          </aside>
+
+          {/* Center — transcript */}
+          <section className="flex h-full min-h-0 flex-col lg:col-span-6">
+            <VoiceTranscriptPanel voice={voice} />
+          </section>
+
+          {/* Right — controls & vitals */}
+          <aside className="min-h-0 overflow-y-auto lg:col-span-3 scrollbar-thin">
+            <VoiceControlsPanel voice={voice} />
+          </aside>
         </div>
       </div>
     </div>
   );
 }
-

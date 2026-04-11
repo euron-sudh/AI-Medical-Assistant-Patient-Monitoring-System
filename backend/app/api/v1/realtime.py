@@ -13,9 +13,34 @@ import requests
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
+from app.integrations.openai_client import OpenAIClientError
 from app.middleware.auth_middleware import require_role
+from app.services.lab_recommendation_service import generate_lab_report_markdown, utc_now_iso
 
 bp = Blueprint("realtime", __name__, url_prefix="/api/v1/realtime")
+
+REQUEST_LAB_TOOL: dict[str, Any] = {
+    "type": "function",
+    "name": "request_lab_recommendations",
+    "description": (
+        "Call once when you have gathered enough symptom information to suggest laboratory work. "
+        "Pass a structured summary of chief complaint, symptoms, timing, severity, and relevant context. "
+        "The system returns suggested lab tests; you will explain them to the patient and close the session."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "symptoms_summary": {
+                "type": "string",
+                "description": (
+                    "Concise structured summary of reported symptoms (not a diagnosis). "
+                    "Include language used if relevant."
+                ),
+            },
+        },
+        "required": ["symptoms_summary"],
+    },
+}
 
 
 def _openai_base_url() -> str:
@@ -53,15 +78,22 @@ def create_realtime_session():
         "You are Med Assist virtual doctor conducting a voice-based symptom assessment.\n"
         "When the patient starts speaking, detect the patient's spoken language and continue in that language.\n"
         "If you are unsure of the language, ask a short clarification question.\n\n"
-        "Ask one question at a time to gather symptom details.\n"
-        "When you have enough information, recommend appropriate medical tests and next steps.\n"
-        "If emergency symptoms are suspected, advise calling emergency services immediately."
+        "Ask ONE question at a time to understand symptoms, duration, severity, and relevant history.\n"
+        "Do not diagnose. Do not invent tests before calling the tool.\n\n"
+        "When you have enough information to propose laboratory evaluation, call request_lab_recommendations "
+        "exactly once with a clear symptoms_summary. If the patient later adds major new symptoms, you may call again.\n\n"
+        "After you receive the tool output (lab_recommendations_markdown), explain the suggested tests briefly in the "
+        "patient's language, remind them this is not a diagnosis, and that they should review with a licensed clinician. "
+        "Tell them they can download the full lab test list using the Download lab test button in the app. "
+        "Thank them, say the session is complete, and do not ask further medical questions.\n\n"
+        "If emergency symptoms are suspected, advise calling emergency services immediately before anything else."
     )
 
     payload = {
         "model": model,
         "voice": voice,
         "instructions": instructions,
+        "tools": [REQUEST_LAB_TOOL],
         # Prefer both audio + text so UI can display transcript while playing audio.
         "modalities": ["audio", "text"],
         # Ask the model to also produce text output while speaking.
@@ -105,4 +137,30 @@ def create_realtime_session():
         "expires_at": data.get("expires_at"),
         "client_secret": client_secret,
     }), 201
+
+
+@bp.route("/lab-recommendations", methods=["POST"])
+@jwt_required()
+@require_role(["patient"])
+def create_lab_recommendations():
+    """Generate lab test suggestions from conversation text using gpt-4o-mini."""
+    _patient_id = get_jwt_identity()
+    body: dict[str, Any] = request.get_json(silent=True) or {}
+    transcript = (body.get("transcript") or "").strip()
+    if not transcript:
+        return jsonify({
+            "error": {"code": "VALIDATION_ERROR", "message": "transcript is required"},
+        }), 400
+
+    try:
+        report_markdown = generate_lab_report_markdown(transcript)
+    except OpenAIClientError as exc:
+        return jsonify({
+            "error": {"code": "LAB_GENERATION_ERROR", "message": str(exc)},
+        }), 502
+
+    return jsonify({
+        "report_markdown": report_markdown,
+        "generated_at": utc_now_iso(),
+    }), 200
 
