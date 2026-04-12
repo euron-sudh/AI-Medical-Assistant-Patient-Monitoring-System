@@ -412,3 +412,240 @@ This should be implemented as a layered system:
 4. environment-specific listening modes,
 5. UI guidance,
 6. diagnostics and logging.
+
+# Cursor Task: Add Dark Theme, Theme Toggle, and Move AI Status Indicator to Top-Right
+
+## Context
+
+The application currently supports only a light theme.
+I want the app to support both light mode and dark mode.
+I also want a toggle button so the user can switch between light and dark theme easily.
+
+There is also an "AI Connected" status indicator currently shown in the top-left corner.
+I want that status indicator moved to the top-right corner.
+
+This task is only about UI and theming.
+Do not include any `gpt-realtime` integration requirement in this task.
+
+***
+
+## Goal
+
+Update the existing application so that:
+1. It supports both light theme and dark theme.
+2. It has a visible theme toggle button.
+3. The selected theme is applied consistently across the full app UI.
+4. The "AI Connected" indicator is moved from the top-left to the top-right corner.
+5. The header layout remains clean, responsive, and visually balanced.
+
+***
+
+## Main Requirements
+
+### 1. Add dark theme support
+Implement a proper dark theme for the full application.
+This should not be a partial color inversion.
+All important UI surfaces must have light and dark variants, including:
+- page background
+- cards / panels
+- text colors
+- borders
+- buttons
+- inputs
+- headers
+- sidebar if present
+- chat / transcript area if present
+- call controls if present
+- badges / indicators
+
+The dark theme should feel intentionally designed and readable, not just dimmed.
+
+***
+
+### 2. Add a light/dark toggle button
+Create a theme toggle button in the UI.
+The button should let the user switch between light mode and dark mode.
+
+Expectations:
+- The toggle should be easy to find.
+- It should work instantly.
+- It should visually show the current mode.
+- Use clear icons if suitable, such as sun/moon.
+- The toggle should not break the layout on mobile or desktop.
+
+Recommended behavior:
+- Default to system preference on first load if no saved preference exists.
+- Save the user’s selected theme so it remains consistent on reload.
+
+If the current app already has a global state/store, integrate theme state there.
+Otherwise, add a clean theme state solution.
+
+***
+
+### 3. Apply theme consistently across the app
+Do not change only the page shell.
+Theme support must be applied across all major components.
+
+Cursor should audit and update:
+- root layout
+- navbar / header
+- status badges
+- form controls
+- call UI
+- transcript/messages
+- modals / drawers
+- cards / sections
+- hover states
+- focus states
+- disabled states
+
+Make sure text contrast remains readable in dark mode.
+Interactive elements should still clearly look interactive in both themes.
+
+***
+
+### 4. Move the AI connection status indicator to the top-right corner
+The current "AI Connected" status badge is on the top-left.
+Move this status element to the top-right corner of the application header or top bar.
+
+Requirements:
+- Keep it visually neat and aligned.
+- It should not overlap with the title, nav, or theme toggle.
+- It should remain responsive on smaller screens.
+- If needed, place the theme toggle and connection badge together in the top-right utility area.
+
+Preferred layout:
+- Left side: branding / page title
+- Right side: connection status + theme toggle
+
+This task only moves and styles the existing indicator.
+Do not add backend or realtime connection logic as part of this request.
+
+***
+
+## UI Requirements
+
+### Header / top bar structure
+Refactor the top bar so it supports:
+- app title or logo on the left
+- utility controls on the right
+- connection status badge in the right area
+- theme toggle button in the right area
+
+Suggested order on the right side:
+1. AI status badge
+2. Theme toggle button
+
+On mobile:
+- Keep both visible if possible
+- If space is tight, keep the status compact
+- Do not allow layout breakage or overlap
+
+***
+
+### Status badge design
+Design the connection badge so it is easy to understand at a glance.
+
+Recommended behavior:
+- Small dot + label
+- Clean and compact styling
+- Works in both light and dark theme
+- Looks visually consistent with the rest of the design system
+
+Example label:
+- AI Connected
+
+Since this request removes integration work, keep the badge styling-focused and placement-focused only.
+Do not add realtime lifecycle state handling in this task.
+
+***
+
+### Theme toggle design
+The theme toggle should:
+- be accessible by keyboard
+- have a clear hover/focus state
+- include accessible labeling
+- support icon-only or icon+text style
+- animate lightly if the app already uses micro-interactions
+
+If the design system exists, use its button/icon styling.
+Do not create a one-off component that looks inconsistent.
+
+***
+
+## Technical Requirements
+
+### Theme system
+Implement theme support in a scalable way.
+Use one of these depending on the app architecture:
+- CSS variables
+- Tailwind dark mode strategy
+- theme provider/context
+- existing design token system
+
+Need clean separation for tokens such as:
+- background
+- foreground text
+- muted text
+- border
+- card background
+- primary action
+- danger / error
+- success
+- warning
+
+Do not hardcode colors in random components.
+Centralize theme values where possible.
+
+***
+
+### Theme persistence
+Persist the user’s chosen theme.
+Recommended approach:
+- read saved theme on app load
+- if none exists, use system theme preference
+- allow manual override from toggle
+
+Make sure there is no flash of wrong theme during initial page load if possible.
+
+***
+
+## Cursor Implementation Tasks
+
+1. Inspect the existing app structure and identify the current theme implementation.
+2. Add full dark theme support across the application.
+3. Create or update centralized theme tokens/styles for both light and dark mode.
+4. Add a theme toggle button in the header or top-right utility area.
+5. Persist the selected theme and restore it on reload.
+6. Audit all major screens/components and make them theme-aware.
+7. Locate the current "AI Connected" indicator implementation.
+8. Move the indicator from top-left to top-right.
+9. Refactor the header/top bar layout so the status badge and theme toggle align cleanly on the right.
+10. Ensure the new header layout works on desktop and mobile.
+11. Test the UI in both light and dark mode.
+12. Verify the moved status badge stays visually consistent after the layout change.
+
+***
+
+## Acceptance Criteria
+
+The work is complete when:
+- The app supports both light and dark themes.
+- A visible toggle button switches theme instantly.
+- The selected theme persists across reloads.
+- The dark theme is applied consistently across the full UI.
+- The current top-left AI status indicator is moved to the top-right.
+- The header remains clean and responsive on mobile and desktop.
+- No component has unreadable text or broken contrast in dark mode.
+- No layout overlap happens between title, status badge, and theme toggle.
+- No realtime integration logic is added as part of this task.
+
+***
+
+## Notes For Cursor
+
+Prioritize clean architecture over a quick patch.
+Do not implement dark mode with scattered one-off fixes.
+Build it so future UI components automatically follow the theme system.
+
+This request is only for theming and UI layout adjustments.

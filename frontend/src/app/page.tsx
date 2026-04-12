@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Stethoscope,
   FileText,
@@ -96,25 +97,25 @@ function HeroSection() {
                 priority
               />
               {/* Floating stat cards */}
-              <div className="absolute bottom-4 left-4 rounded-xl bg-white/95 backdrop-blur-sm p-4 shadow-lg">
+              <div className="absolute bottom-4 left-4 rounded-xl bg-white/95 p-4 shadow-lg backdrop-blur-sm dark:bg-slate-900/95">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-950">
+                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-900">98.5% Accuracy</p>
-                    <p className="text-xs text-gray-500">AI Diagnostic Rate</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">98.5% Accuracy</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">AI Diagnostic Rate</p>
                   </div>
                 </div>
               </div>
-              <div className="absolute top-4 right-4 rounded-xl bg-white/95 backdrop-blur-sm p-4 shadow-lg">
+              <div className="absolute top-4 right-4 rounded-xl bg-white/95 p-4 shadow-lg backdrop-blur-sm dark:bg-slate-900/95">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
-                    <Activity className="h-5 w-5 text-blue-600" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-950">
+                    <Activity className="h-5 w-5 text-blue-600 dark:text-sky-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-900">Real-Time</p>
-                    <p className="text-xs text-gray-500">Vitals Monitoring</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Real-Time</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">Vitals Monitoring</p>
                   </div>
                 </div>
               </div>
@@ -126,7 +127,10 @@ function HeroSection() {
       {/* Wave divider */}
       <div className="absolute bottom-0 left-0 right-0">
         <svg viewBox="0 0 1440 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M0 80h1440V30c-240 30-480 50-720 50S240 60 0 30v50z" fill="white" />
+          <path
+            d="M0 80h1440V30c-240 30-480 50-720 50S240 60 0 30v50z"
+            className="fill-white dark:fill-[hsl(224_71%_4%)]"
+          />
         </svg>
       </div>
     </section>
@@ -144,15 +148,15 @@ function StatsSection() {
   ];
 
   return (
-    <section className="border-b border-gray-100 bg-white py-12">
+    <section className="border-b border-border bg-background py-12">
       <div className="mx-auto max-w-7xl px-6">
         <div className="grid grid-cols-2 gap-8 lg:grid-cols-4">
           {stats.map((stat) => (
             <div key={stat.label} className="text-center">
-              <p className="text-3xl font-bold text-blue-600 sm:text-4xl">
+              <p className="text-3xl font-bold text-primary sm:text-4xl">
                 {stat.value}
               </p>
-              <p className="mt-1 text-sm text-gray-600">{stat.label}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{stat.label}</p>
             </div>
           ))}
         </div>
@@ -216,16 +220,16 @@ const FEATURES = [
 
 function FeaturesSection() {
   return (
-    <section id="features" className="bg-white py-20 sm:py-28">
+    <section id="features" className="bg-background py-20 sm:py-28">
       <div className="mx-auto max-w-7xl px-6">
         <div className="text-center">
-          <p className="text-sm font-semibold uppercase tracking-wider text-blue-600">
+          <p className="text-sm font-semibold uppercase tracking-wider text-primary">
             Features
           </p>
-          <h2 className="mt-2 text-3xl font-bold text-gray-900 sm:text-4xl">
+          <h2 className="mt-2 text-3xl font-bold text-foreground sm:text-4xl">
             Everything You Need in One Platform
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-600">
+          <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
             Six powerful capabilities working together to deliver comprehensive,
             AI-powered healthcare.
           </p>
@@ -235,7 +239,7 @@ function FeaturesSection() {
           {FEATURES.map((feature) => (
             <div
               key={feature.title}
-              className="group overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm transition hover:shadow-xl hover:border-blue-100"
+              className="group overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:shadow-xl hover:border-primary/30"
             >
               <div className="relative h-48 overflow-hidden">
                 <Image
@@ -251,10 +255,10 @@ function FeaturesSection() {
                 </div>
               </div>
               <div className="p-6">
-                <h3 className="text-xl font-semibold text-gray-900">
+                <h3 className="text-xl font-semibold text-card-foreground">
                   {feature.title}
                 </h3>
-                <p className="mt-3 text-gray-600 leading-relaxed">
+                <p className="mt-3 text-muted-foreground leading-relaxed">
                   {feature.description}
                 </p>
               </div>
@@ -279,16 +283,16 @@ const STEPS = [
 
 function HowItWorksSection() {
   return (
-    <section id="how-it-works" className="bg-gray-50 py-20 sm:py-28">
+    <section id="how-it-works" className="bg-muted/40 py-20 dark:bg-muted/20 sm:py-28">
       <div className="mx-auto max-w-7xl px-6">
         <div className="text-center">
-          <p className="text-sm font-semibold uppercase tracking-wider text-blue-600">
+          <p className="text-sm font-semibold uppercase tracking-wider text-primary">
             Patient Journey
           </p>
-          <h2 className="mt-2 text-3xl font-bold text-gray-900 sm:text-4xl">
+          <h2 className="mt-2 text-3xl font-bold text-foreground sm:text-4xl">
             How It Works
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-600">
+          <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
             From symptoms to resolution — your complete patient journey, powered by AI.
           </p>
         </div>
@@ -296,17 +300,17 @@ function HowItWorksSection() {
         {/* Desktop: horizontal timeline */}
         <div className="mt-16 hidden lg:block">
           <div className="relative flex items-start justify-between">
-            <div className="absolute top-10 left-[8%] right-[8%] h-0.5 bg-blue-200" />
+            <div className="absolute top-10 left-[8%] right-[8%] h-0.5 bg-blue-200 dark:bg-blue-800/80" />
             {STEPS.map((step, idx) => (
               <div key={step.title} className="relative flex w-1/6 flex-col items-center text-center px-2">
-                <div className="relative z-10 flex h-20 w-20 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg ring-4 ring-blue-100">
+                <div className="relative z-10 flex h-20 w-20 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg ring-4 ring-blue-100 dark:ring-blue-900/80">
                   <step.icon className="h-8 w-8" />
                 </div>
                 <span className="mt-3 inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
                   {idx + 1}
                 </span>
-                <h3 className="mt-3 text-sm font-semibold text-gray-900">{step.title}</h3>
-                <p className="mt-2 text-xs text-gray-600 leading-relaxed">{step.description}</p>
+                <h3 className="mt-3 text-sm font-semibold text-foreground">{step.title}</h3>
+                <p className="mt-2 text-xs text-muted-foreground leading-relaxed">{step.description}</p>
               </div>
             ))}
           </div>
@@ -320,12 +324,14 @@ function HowItWorksSection() {
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-md">
                   <step.icon className="h-5 w-5" />
                 </div>
-                {idx < STEPS.length - 1 && <div className="mt-2 h-full w-0.5 bg-blue-200" />}
+                {idx < STEPS.length - 1 && (
+                  <div className="mt-2 h-full w-0.5 bg-blue-200 dark:bg-blue-800/80" />
+                )}
               </div>
               <div className="pb-6">
-                <span className="text-sm font-medium text-blue-600">Step {idx + 1}</span>
-                <h3 className="mt-1 text-lg font-semibold text-gray-900">{step.title}</h3>
-                <p className="mt-1 text-gray-600">{step.description}</p>
+                <span className="text-sm font-medium text-primary">Step {idx + 1}</span>
+                <h3 className="mt-1 text-lg font-semibold text-foreground">{step.title}</h3>
+                <p className="mt-1 text-muted-foreground">{step.description}</p>
               </div>
             </div>
           ))}
@@ -360,27 +366,29 @@ function TestimonialsSection() {
   ];
 
   return (
-    <section className="bg-white py-20 sm:py-28">
+    <section className="bg-background py-20 sm:py-28">
       <div className="mx-auto max-w-7xl px-6">
         <div className="text-center">
-          <p className="text-sm font-semibold uppercase tracking-wider text-blue-600">Testimonials</p>
-          <h2 className="mt-2 text-3xl font-bold text-gray-900 sm:text-4xl">Trusted by Doctors and Patients</h2>
+          <p className="text-sm font-semibold uppercase tracking-wider text-primary">Testimonials</p>
+          <h2 className="mt-2 text-3xl font-bold text-foreground sm:text-4xl">
+            Trusted by Doctors and Patients
+          </h2>
         </div>
 
         <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {testimonials.map((t) => (
-            <div key={t.name} className="rounded-xl border border-gray-100 bg-white p-8 shadow-sm">
+            <div key={t.name} className="rounded-xl border border-border bg-card p-8 shadow-sm">
               <div className="flex gap-1 text-amber-400">
                 {[...Array(5)].map((_, i) => (
                   <Star key={i} className="h-4 w-4 fill-current" />
                 ))}
               </div>
-              <p className="mt-4 text-gray-700 leading-relaxed italic">&ldquo;{t.quote}&rdquo;</p>
+              <p className="mt-4 text-muted-foreground leading-relaxed italic">&ldquo;{t.quote}&rdquo;</p>
               <div className="mt-6 flex items-center gap-3">
                 <Image src={t.image} alt={t.name} width={44} height={44} className="rounded-full object-cover" />
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">{t.name}</p>
-                  <p className="text-xs text-gray-500">{t.role}</p>
+                  <p className="text-sm font-semibold text-card-foreground">{t.name}</p>
+                  <p className="text-xs text-muted-foreground">{t.role}</p>
                 </div>
               </div>
             </div>
@@ -484,7 +492,7 @@ function Footer() {
 
 export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen bg-background">
       <nav className="absolute top-0 z-50 w-full">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <Link href="/" className="flex items-center gap-2">
@@ -496,7 +504,10 @@ export default function LandingPage() {
             <Link href="/#how-it-works" className="text-sm font-medium text-white/80 transition hover:text-white">How it Works</Link>
             <Link href="/demo" className="text-sm font-medium text-white/80 transition hover:text-white">Demo</Link>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <span className="rounded-md border border-white/20 bg-white/10 p-0.5 backdrop-blur-sm [&_button]:border-0 [&_button]:bg-transparent [&_button]:shadow-none [&_button]:text-white">
+              <ThemeToggle />
+            </span>
             <Link href="/login" className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:bg-white/10">
               Sign In
             </Link>
