@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -35,7 +36,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       <aside className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r border-border bg-card">
         <div className="flex h-16 items-center gap-2 border-b border-border px-6">
           <span className="text-xl font-bold text-primary">MedAssist</span>
-          <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+          <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-300">
             Admin
           </span>
         </div>
@@ -73,8 +74,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       </aside>
 
       <main className="ml-64 flex-1">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-card/80 px-8 backdrop-blur">
-          <h2 className="text-lg font-semibold text-foreground">Admin Panel</h2>
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-border bg-card/80 px-4 backdrop-blur sm:px-8">
+          <h2 className="truncate text-base font-semibold text-foreground sm:text-lg">Admin Panel</h2>
+          <ThemeToggle />
         </header>
         <div className="p-8">{children}</div>
       </main>

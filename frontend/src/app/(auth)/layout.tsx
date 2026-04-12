@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface AuthLayoutProps {
   children: React.ReactNode;
@@ -141,8 +142,13 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
       </div>
 
       {/* RIGHT SIDE - Form */}
-      <div className="flex w-full items-center justify-center bg-white px-6 py-12 lg:w-[40%] lg:px-12">
-        <div className="w-full max-w-md">{children}</div>
+      <div className="flex w-full items-center justify-center bg-background px-6 py-12 lg:w-[40%] lg:px-12">
+        <div className="flex w-full max-w-md flex-col">
+          <div className="mb-6 flex justify-end">
+            <ThemeToggle />
+          </div>
+          {children}
+        </div>
       </div>
     </div>
   );

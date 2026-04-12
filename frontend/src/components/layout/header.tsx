@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { User } from "@/types/auth";
 
 export function Header() {
@@ -51,7 +52,8 @@ export function Header() {
           <span className="text-xl font-bold text-primary">MedAssist AI</span>
         </Link>
 
-        <nav className="flex items-center gap-4">
+        <nav className="flex items-center gap-2 md:gap-4">
+          <ThemeToggle />
           {user ? (
             <>
               <span className="hidden text-sm text-muted-foreground md:inline-block">

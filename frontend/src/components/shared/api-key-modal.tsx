@@ -66,8 +66,8 @@ export function ApiKeyModal({ isOpen, onClose, onSave }: ApiKeyModalProps) {
         </p>
 
         <div className="mt-4 space-y-3">
-          <div className="flex items-center gap-2 text-sm text-green-600">
-            <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+          <div className="flex items-center gap-2 text-sm text-green-600 dark:text-emerald-400">
+            <span className="inline-block h-2 w-2 rounded-full bg-green-500 dark:bg-emerald-500" />
             Default key active — AI features are working
           </div>
 

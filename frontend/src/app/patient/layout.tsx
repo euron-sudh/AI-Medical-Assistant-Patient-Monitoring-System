@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ApiKeyButton } from "@/components/shared/api-key-modal";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface PatientLayoutProps {
   children: React.ReactNode;
@@ -37,12 +38,9 @@ export default function PatientLayout({ children }: PatientLayoutProps) {
       <aside className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r border-border bg-card">
         <div className="flex h-16 items-center gap-2 border-b border-border px-6">
           <span className="text-xl font-bold text-primary">MedAssist</span>
-          <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+          <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary dark:bg-primary/20">
             Patient
           </span>
-          <div className="ml-auto">
-            <ApiKeyButton />
-          </div>
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-4 scrollbar-thin">
@@ -78,8 +76,12 @@ export default function PatientLayout({ children }: PatientLayoutProps) {
       </aside>
 
       <main className="ml-64 flex-1">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-card/80 px-8 backdrop-blur">
-          <h2 className="text-lg font-semibold text-foreground">Patient Portal</h2>
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-border bg-card/80 px-4 backdrop-blur sm:px-8">
+          <h2 className="truncate text-base font-semibold text-foreground sm:text-lg">Patient Portal</h2>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <ApiKeyButton />
+            <ThemeToggle />
+          </div>
         </header>
         <div className="p-8">{children}</div>
       </main>
