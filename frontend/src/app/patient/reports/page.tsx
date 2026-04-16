@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import apiClient from "@/lib/api-client";
 
 interface MedicalReport {
@@ -82,15 +83,23 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Medical Reports</h1>
           <p className="mt-1 text-muted-foreground">
             View your medical reports and AI-generated analysis summaries.
           </p>
         </div>
-        <div className="text-sm text-muted-foreground">
-          {reports.length} report{reports.length !== 1 ? "s" : ""}
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            href="/patient/reports/upload"
+            className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Upload lab report
+          </Link>
+          <span className="text-sm text-muted-foreground">
+            {reports.length} report{reports.length !== 1 ? "s" : ""}
+          </span>
         </div>
       </div>
 

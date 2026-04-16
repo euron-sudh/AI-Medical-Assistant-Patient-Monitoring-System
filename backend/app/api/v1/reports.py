@@ -17,7 +17,9 @@ import os
 import uuid
 from datetime import datetime, timezone
 
-from flask import Blueprint, jsonify, request
+import io
+
+from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 from pydantic import ValidationError
 
@@ -156,6 +158,70 @@ def upload_report_file():
 
 
 # ---------------------------------------------------------------------------
+# Lab report: hybrid PDF + OCR + structured parse + patient analysis (sync)
+# ---------------------------------------------------------------------------
+
+
+@bp.route("/lab/analyze", methods=["POST"])
+@jwt_required()
+def lab_report_analyze():
+    """Upload a lab report (PDF/PNG/JPEG), run hybrid extraction + AI analysis, persist report.
+
+    multipart/form-data:
+        file (required), patient_id (required), title (optional)
+    """
+    if "file" not in request.files:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "No file provided"}}), 400
+
+    file = request.files["file"]
+    if not file.filename:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Empty filename"}}), 400
+
+    patient_id = request.form.get("patient_id")
+    title = request.form.get("title") or "Lab report"
+    if not patient_id:
+        return jsonify({
+            "error": {"code": "VALIDATION_ERROR", "message": "patient_id is required"},
+        }), 400
+
+    try:
+        patient_uuid = uuid.UUID(patient_id)
+    except ValueError:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Invalid patient ID"}}), 400
+
+    access_error = _check_patient_access(patient_id)
+    if access_error:
+        return access_error
+
+    file_bytes = file.read()
+    current_user_id = uuid.UUID(get_jwt_identity())
+
+    from app.services.lab_report.pipeline import run_lab_report_pipeline
+
+    out = run_lab_report_pipeline(
+        file_bytes=file_bytes,
+        filename=file.filename,
+        patient_id=patient_uuid,
+        created_by=current_user_id,
+        title=title[:255],
+        persist=True,
+    )
+
+    if out.status == "failed":
+        err = out.extraction.get("error", "Processing failed")
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "message": err}}), 400
+
+    return jsonify({
+        "report_id": out.report_id,
+        "extraction": out.extraction,
+        "structured_lab_values": out.structured_lab_values,
+        "patient_analysis": out.patient_analysis,
+        "ai_summary": out.ai_summary,
+        "full_ai_analysis": out.full_ai_analysis,
+    }), 200
+
+
+# ---------------------------------------------------------------------------
 # Task #30 — Presigned download URL
 # ---------------------------------------------------------------------------
 
@@ -196,6 +262,63 @@ def download_report(report_id: str):
         "download_url": download_url,
         "expires_in": 900,
     }), 200
+
+
+# ---------------------------------------------------------------------------
+# PDF export — Lab report analysis
+# ---------------------------------------------------------------------------
+
+
+@bp.route("/<report_id>/analysis-pdf", methods=["GET"])
+@jwt_required()
+def download_lab_report_analysis_pdf(report_id: str):
+    """Download the stored lab report analysis as a formatted PDF."""
+    from datetime import datetime, timezone
+
+    from app.extensions import db
+    from app.models.report import MedicalReport
+    from app.models.user import User
+    from app.utils.pdf_export import build_lab_report_analysis_pdf
+
+    try:
+        report_uuid = uuid.UUID(report_id)
+    except ValueError:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Invalid report ID"}}), 400
+
+    report = db.session.get(MedicalReport, report_uuid)
+    if report is None:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": "Report not found"}}), 404
+
+    # Access check — use patient_id from the report
+    access_error = _check_patient_access(report.patient_id)
+    if access_error:
+        return access_error
+
+    analysis = report.ai_analysis or {}
+    if not analysis:
+        return jsonify({
+            "error": {"code": "BAD_REQUEST", "message": "Report has no analysis to export yet"},
+        }), 400
+
+    patient = db.session.get(User, report.patient_id)
+    patient_name = patient.full_name if patient else None
+
+    try:
+        pdf_bytes = build_lab_report_analysis_pdf(patient_name=patient_name, analysis=analysis)
+    except Exception as exc:
+        return jsonify({
+            "error": {"code": "PDF_EXPORT_ERROR", "message": str(exc)},
+        }), 500
+
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    filename = f"medassist-lab-report-analysis-{stamp}.pdf"
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=filename,
+        max_age=0,
+    )
 
 
 # ---------------------------------------------------------------------------

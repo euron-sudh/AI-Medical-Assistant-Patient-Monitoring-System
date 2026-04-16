@@ -649,3 +649,740 @@ Do not implement dark mode with scattered one-off fixes.
 Build it so future UI components automatically follow the theme system.
 
 This request is only for theming and UI layout adjustments.
+
+# Cursor Task: Add Lab Report Upload, OCR Extraction, Hybrid PDF Text Extraction, Medical Analysis, Precautions, and Emergency Recommendation Flow
+
+## Context
+
+This is for the same Med Assist application.
+I want to add a new feature where a patient can upload a lab report.
+The application should read the uploaded report, extract the report content, analyze the findings, and explain to the patient:
+- what possible issue or abnormality is indicated,
+- what precautions the patient can take,
+- what general advice should be followed,
+- and if the situation appears serious or urgent, the AI should strongly suggest doctor consultation or emergency care.
+
+This feature should be designed carefully because it is healthcare-related.
+The system should be helpful, easy to understand, and medically safe.
+
+Important update for document processing:
+Use a hybrid extraction flow.
+Do not rely only on OCR for every PDF.
+For system-generated PDFs, first try native PDF text extraction.
+For scanned PDFs or image-based pages, fall back to OCR.
+This will improve accuracy and reduce unnecessary OCR errors.
+
+***
+
+## Goal
+
+Add a complete lab-report analysis feature to the application so that a patient can:
+1. Upload a lab report image or PDF.
+2. Have the report content extracted using a hybrid strategy.
+3. Use native PDF text extraction for system-generated PDFs.
+4. Use OCR for scanned PDFs and image uploads.
+5. Have the extracted content parsed into structured medical values where possible.
+6. Receive an AI-generated explanation in simple language.
+7. Receive likely issue summaries, precautions, and general advice.
+8. Be warned clearly when the findings may require urgent doctor consultation.
+
+***
+
+## High-Level Feature Flow
+
+1. Patient uploads a lab report file.
+2. System validates file type and size.
+3. System detects whether the file is an image, a scanned PDF, or a system-generated PDF.
+4. If the PDF already contains selectable/native text, use native PDF text extraction first.
+5. If the file is scanned or text extraction is poor, run OCR.
+6. Extracted text is cleaned and structured.
+7. Relevant values are identified, such as test name, result, unit, reference range, abnormal flag, and notes.
+8. AI analyzes the extracted report details.
+9. App shows a patient-friendly response that explains:
+   - important findings,
+   - possible health concern,
+   - precautions,
+   - next-step advice,
+   - urgency level.
+10. If the report appears critical, the app should clearly advise prompt doctor consultation or emergency evaluation.
+
+***
+
+## Main Requirements
+
+### 1. Lab report upload
+Add a dedicated upload flow for lab reports.
+
+Supported inputs should include:
+- image files such as JPG, JPEG, PNG
+- PDF lab reports
+
+Upload requirements:
+- validate supported file types
+- validate file size
+- show upload progress if applicable
+- show error state for invalid files
+- allow retry / replace upload
+- allow preview of uploaded file if feasible
+
+The user experience should be simple and patient-friendly.
+
+***
+
+### 2. Hybrid document extraction
+Do not use a single extraction method for all report types.
+Implement a hybrid extraction pipeline.
+
+Expected behavior:
+- For system-generated PDFs, first attempt native text extraction.
+- For scanned PDFs, image-based PDFs, or pages with poor extractable text, use OCR.
+- For image uploads, use OCR directly.
+- If native PDF extraction returns weak or incomplete text, automatically fall back to OCR.
+
+Need a decision layer that determines the best extraction path.
+This should reduce OCR noise on digital PDFs and still support scanned reports properly.
+
+Store:
+- extraction method used
+- raw extracted text
+- cleaned/normalized extracted text
+- page-level extraction metadata if possible
+
+This is important for debugging, confidence scoring, and future improvements.
+
+***
+
+### 3. OCR extraction
+When a patient uploads a scanned report or image-based content, the app should run OCR on the document.
+
+OCR requirements:
+- extract readable text from image and scanned PDF reports
+- support multi-page PDF reports
+- handle common scanned report layouts
+- preserve line structure as much as possible
+- capture tables and values as accurately as possible
+- tolerate slightly blurry or mobile-captured report images
+
+Need a clean OCR processing pipeline with:
+- upload input
+- OCR execution
+- extracted raw text
+- cleaned text output
+- structured parsing stage
+
+***
+
+### 4. Native PDF extraction
+For system-generated PDFs, first try native PDF parsing instead of OCR.
+This should be the first path for born-digital reports.
+
+Native PDF extraction requirements:
+- extract embedded/selectable text from PDF pages
+- preserve line order as much as possible
+- support multi-page PDFs
+- retain table-like text where possible
+- detect when extracted text quality is too poor and fall back to OCR
+
+Do not assume every PDF is scanned.
+Do not force OCR on PDFs that already contain clean embedded text.
+
+***
+
+### 5. Structured lab parsing
+Do not rely only on free-text extraction output.
+After extraction, attempt to convert report data into structured medical information.
+
+For each detected test item, try to extract:
+- test name
+- result value
+- unit
+- reference range
+- abnormal indicator (high / low / normal / unclear)
+- category if identifiable, such as CBC, lipid profile, thyroid, liver, kidney, glucose, etc.
+
+The parser should handle reports even if formatting differs across labs.
+If structure is incomplete, preserve best-effort extracted data and mark low-confidence fields.
+
+***
+
+### 6. AI analysis output
+After extraction and parsing, send the extracted content into an AI analysis stage.
+The AI response must be written for patients in simple, understandable language.
+
+The AI should explain:
+- what results appear normal,
+- what results appear abnormal,
+- what the abnormal values may indicate,
+- what symptoms or health concerns may be relevant,
+- what precautions the patient can take,
+- what general advice should be followed,
+- when the patient should consult a doctor.
+
+The analysis should avoid sounding overly technical unless necessary.
+It should translate medical terms into patient-friendly language.
+
+***
+
+### 7. Emergency / urgency detection
+This is a critical part of the feature.
+If the report contains potentially dangerous findings, the app should not give casual reassurance.
+It should clearly mark the case as high priority.
+
+Add an urgency classification layer such as:
+- normal
+- mild concern
+- moderate concern
+- urgent
+- emergency / immediate medical attention recommended
+
+For urgent or emergency-like findings, the app should:
+- clearly say the findings may require prompt doctor consultation,
+- advise the patient not to rely only on AI,
+- encourage consultation with a qualified doctor,
+- and if the situation looks severe, say emergency medical attention may be needed.
+
+The wording should be responsible and safety-focused.
+
+***
+
+### 8. Patient safety guardrails
+This feature must not behave like a final medical diagnosis system.
+It should act like a triage-style assistant and explanation layer.
+
+Required safety behavior:
+- avoid claiming definite diagnosis unless explicitly supported and framed carefully
+- clearly state that analysis is informational and not a replacement for a doctor
+- avoid medicine dosage recommendations unless specifically supported by product policy
+- avoid dangerous reassurance when abnormal values are serious
+- encourage doctor consultation for moderate-to-serious findings
+- strongly escalate in urgent/emergency cases
+
+The system should always be conservative in uncertain cases.
+
+***
+
+### 9. Response structure shown to patient
+The UI should display the lab analysis in a clear structure.
+
+Recommended response sections:
+- Report summary
+- Key abnormal findings
+- What this may indicate
+- Precautions to take
+- Recommended next steps
+- Urgency level
+- Doctor consultation recommendation
+
+If confidence in extraction, parsing, or OCR is low, show a notice that results may need manual review.
+
+***
+
+### 10. Confidence and fallback handling
+Extraction and medical parsing may fail or be uncertain.
+The system should handle low-confidence extraction safely.
+
+Need fallback behavior for:
+- unreadable scan
+- partial OCR extraction
+- weak native PDF extraction
+- unclear values
+- missing units
+- missing reference ranges
+- unusual report layout
+- handwritten content if unsupported
+
+In such cases:
+- show that the document could not be fully interpreted,
+- present whatever was extracted,
+- avoid overconfident conclusions,
+- suggest manual review or doctor consultation if uncertainty is high.
+
+***
+
+### 11. UI requirements
+Add a new patient-facing lab report feature with a clear and calm UX.
+
+Suggested UI pieces:
+- upload section for lab report
+- file type/size guidance
+- preview state
+- processing state: uploading, extracting, OCR in progress when needed, analyzing
+- success state with structured results
+- failure state with retry option
+- urgency badge or severity banner
+- doctor consultation recommendation area
+- optional extraction-method debug info for admin/dev use
+
+The language and design should reduce panic while still communicating risk clearly.
+
+***
+
+### 12. Data handling and architecture
+Design the feature as a clean modular pipeline.
+
+Suggested stages:
+1. file upload
+2. file validation
+3. document-type detection
+4. native PDF extraction attempt for system-generated PDFs
+5. OCR fallback for scanned/image-based pages
+6. cleaned text generation
+7. structured parsing
+8. medical analysis generation
+9. urgency classification
+10. UI rendering
+11. audit/debug logging
+
+Keep the pipeline modular so extraction, OCR, parser, and AI analysis can be improved independently.
+
+***
+
+## Technical Expectations
+
+### File support
+Support:
+- PNG
+- JPG / JPEG
+- PDF
+
+Optional later:
+- HEIC if mobile uploads require it
+
+***
+
+### Hybrid extraction expectations
+Implement the following hybrid strategy:
+- If file is image: use OCR
+- If file is PDF: inspect whether embedded text exists
+- If PDF has usable embedded text: use native PDF extraction first
+- If PDF is scanned or extracted text quality is weak: run OCR
+- If needed, support page-level fallback so only problematic pages go through OCR
+
+This hybrid flow should become the default extraction design.
+
+***
+
+### OCR pipeline expectations
+Cursor should implement a reliable OCR flow for images and scanned PDF documents.
+Need support for:
+- multi-page PDF OCR
+- page-by-page OCR when needed
+- text cleanup and normalization
+- table-like line extraction where possible
+
+If OCR is handled by an external library, keep the OCR layer abstracted so it can be swapped later.
+Preferred free/local OCR direction: PaddleOCR first, with room to improve later if needed.
+
+***
+
+### Native PDF extraction expectations
+Add a native PDF text extraction layer for system-generated reports.
+This layer should:
+- extract embedded text without OCR when available
+- preserve order as much as possible
+- capture page-level text output
+- support quality checks before deciding whether OCR fallback is required
+
+Keep this layer abstracted as well so the extraction strategy can evolve later.
+
+***
+
+### Parsing expectations
+Create a parser layer that tries to convert extracted text into normalized lab observations.
+This parser should:
+- identify numeric values
+- identify ranges
+- identify H/L abnormal markers if present
+- map tests into categories when possible
+- preserve unknown lines without dropping them silently
+
+***
+
+### AI prompt / analysis expectations
+The analysis prompt or logic should instruct the AI to:
+- explain findings in patient-friendly language
+- distinguish normal vs abnormal values
+- mention possible issues carefully, not as a guaranteed diagnosis
+- provide practical precautions
+- recommend doctor consultation where appropriate
+- escalate clearly for urgent findings
+- state limitations when extraction confidence is low
+
+***
+
+### Urgency logic expectations
+Do not depend only on free-form text generation for urgency.
+Add a dedicated urgency/severity output field in the backend pipeline.
+
+Need a normalized severity output such as:
+- `normal`
+- `mild`
+- `moderate`
+- `urgent`
+- `emergency`
+
+This value should drive UI styling and doctor-consultation prompts.
+
+***
+
+## Cursor Implementation Tasks
+
+1. Inspect the current Med Assist app structure and identify where a new lab report feature should be added.
+2. Add a new lab report upload UI for patients.
+3. Implement file validation for images and PDFs.
+4. Add document-type detection for uploaded files.
+5. For PDFs, first attempt native text extraction.
+6. Add quality checks to determine whether extracted native PDF text is usable.
+7. Add OCR processing for scanned/image-based reports and weak-extraction fallback cases.
+8. Support multi-page PDF extraction.
+9. Support page-level OCR fallback when only some pages are scanned or weak.
+10. Store raw extracted text and cleaned extracted text.
+11. Record which extraction method was used.
+12. Build a parser to extract structured lab values from extracted content.
+13. Normalize extracted items into fields like test name, value, unit, range, abnormal status, and category.
+14. Add confidence/fallback handling for poor extraction quality.
+15. Create an AI analysis flow that explains findings in simple patient-friendly language.
+16. Add sections for issue summary, precautions, advice, urgency, and next steps.
+17. Implement a severity/urgency classification layer.
+18. Show strong doctor consultation guidance for urgent or emergency findings.
+19. Add clear medical-safety disclaimers in the response.
+20. Design UI states for upload, extraction, OCR fallback, success, low-confidence, and failure.
+21. Add an urgency banner or badge in the result view.
+22. Keep logging/debug support for extraction output, parsing output, and severity decisions.
+23. Make the feature modular so native extraction, OCR, parsing, and analysis can be improved later without rewriting the whole flow.
+
+***
+
+## Acceptance Criteria
+
+The work is complete when:
+- A patient can upload a lab report image or PDF.
+- The system uses native extraction first for system-generated PDFs.
+- The system uses OCR for scanned PDFs and image uploads.
+- The system falls back to OCR when native PDF extraction is weak or incomplete.
+- The system attempts to structure the extracted lab values.
+- The patient receives a readable explanation of important findings.
+- The result includes precautions and general advice.
+- The result includes a clear urgency level.
+- The system recommends doctor consultation for serious findings.
+- The system escalates clearly for possible emergency situations.
+- The system handles poor extraction quality safely and does not act overconfident.
+- The UI includes upload, processing, result, and error states.
+- The feature includes safety language that it is not a replacement for professional medical diagnosis.
+
+***
+
+## Notes For Cursor
+
+Prioritize patient safety, extraction accuracy, and modular design.
+Do not build this as a simplistic “upload and diagnose” feature.
+It should be a hybrid extraction + OCR fallback + structured extraction + AI explanation + urgency recommendation workflow.
+
+The app should help the patient understand the report in simple language while being conservative about diagnosis.
+When findings seem serious, the output should clearly push toward doctor consultation or emergency evaluation rather than giving risky reassurance.
+
+# Cursor Task: Export Lab Test Recommendations and Lab Report Analysis as PDF Files
+
+## Context
+
+This is for the same Med Assist application.
+
+There is already a feature in the AI Assistance tab to download lab test recommendations, but it currently downloads the content in `.md` format.
+I want that download to be changed to **PDF format**.
+
+I also want a new download feature in the Lab Report Analysis section so that the generated lab report analysis can also be downloaded as a **PDF**.
+
+Both PDFs should have a clean medical-report style layout, proper headings, patient name placement, clear section formatting, and visually structured colors.
+
+---
+
+## Goal
+
+Implement two PDF download features in the application:
+
+1. **AI Assistance tab**: Download lab test recommendation as a formatted PDF instead of `.md`.
+2. **Lab Report Analysis section**: Add a new download button/tab that exports the full generated lab report analysis as a formatted PDF.
+
+Both exports should include:
+- branded heading,
+- patient name,
+- clear section formatting,
+- readable typography,
+- side headings / section titles,
+- proper spacing,
+- color styling,
+- and print-friendly structure.
+
+---
+
+## Feature 1: Lab Test Recommendation PDF Export
+
+### Current behavior
+The application already lets the user download lab test recommendations, but the file is currently downloaded as a Markdown file.
+
+### Required behavior
+Replace the `.md` download with a **PDF download**.
+
+### PDF heading requirements
+The exported PDF should have the following top structure:
+- Main heading: `MedAssist Lab Tests`
+- Below the heading: patient name
+- Below that: the lab test recommendation content
+
+### Layout requirements
+The PDF should be properly formatted and should not look like raw text.
+
+Include:
+- heading section at the top
+- patient details section under the heading
+- section titles / side headings for major parts of the lab recommendation content
+- consistent margins and spacing
+- readable font sizing
+- subtle medical-style color usage
+- clean visual hierarchy
+
+### Styling expectations
+Use a professional medical-report style.
+Suggested design direction:
+- bold top title
+- smaller subtitle/patient info under it
+- colored section headers
+- divider lines or card-like sections if appropriate
+- colors that work well for healthcare UI, such as blue/teal/neutral tones
+- keep it readable when printed in PDF
+
+### Content handling
+The exported PDF should include all the generated lab test recommendation content already shown in the app.
+If the content is currently in Markdown or rich text, render it into a clean PDF layout instead of dumping raw markdown text.
+
+---
+
+## Feature 2: Lab Report Analysis PDF Export
+
+### New requirement
+In the **Lab Report Analysis** section, add a new download button or tab for downloading the generated analysis as a PDF.
+
+### PDF heading requirements
+The exported PDF should have the following top structure:
+- Main heading: `MedAssist Lab Report Analysis`
+- Below the heading: patient name
+- Below that: the generated lab analysis content
+
+### Content to include
+The PDF should include all generated analysis content from the Lab Report Analysis section, such as:
+- report summary
+- abnormal findings
+- interpretation / possible issue
+- precautions
+- advice / next steps
+- urgency level
+- doctor consultation recommendation
+- disclaimers if shown in UI
+
+If some sections are conditionally shown in the UI, export all available generated sections that exist for that patient/report.
+
+### Layout requirements
+Use a structured report-style PDF format.
+
+Suggested section flow:
+1. Header with report title
+2. Patient name
+3. Summary section
+4. Findings section
+5. Precautions section
+6. Advice / next steps section
+7. Urgency / doctor consultation section
+8. Footer or disclaimer section if needed
+
+The final PDF should look like a proper report, not plain text.
+
+---
+
+## Shared PDF Requirements
+
+Both PDF exports should follow a reusable PDF template system.
+Do not implement two completely separate one-off PDF generators if avoidable.
+Create a reusable PDF export utility/template layer.
+
+### Shared formatting expectations
+- proper page margins
+- consistent fonts
+- consistent line spacing
+- section headings with color styling
+- support for multi-line content
+- support for multi-page PDF if content is long
+- automatic text wrapping
+- avoid text clipping or overflow
+- header should remain visually strong on page one
+
+### Reusable elements
+Create reusable formatting components or helpers for:
+- report header
+- patient info block
+- section heading block
+- content paragraph rendering
+- lists / bullet rendering if needed
+- divider lines
+- footer/disclaimer block if needed
+
+---
+
+## Patient Name Handling
+
+Both export flows must include the **patient name** below the main heading.
+
+Requirements:
+- fetch patient name from the current app state / selected patient context / report context
+- if patient name is unavailable, handle gracefully with fallback such as `Patient Name: Not Provided`
+- ensure the name appears consistently in both export formats
+
+Example structure:
+- `MedAssist Lab Tests`
+- `Patient Name: <name>`
+- content starts below
+
+and
+
+- `MedAssist Lab Report Analysis`
+- `Patient Name: <name>`
+- content starts below
+
+---
+
+## UI Requirements
+
+### AI Assistance tab
+Update the existing download action so it downloads **PDF instead of Markdown**.
+
+Requirements:
+- keep the button placement intuitive
+- rename the button label if needed, for example `Download PDF`
+- ensure it exports the current lab test recommendation content
+- remove or replace the old `.md` export behavior
+
+### Lab Report Analysis section
+Add a new download action for exporting the report analysis as PDF.
+
+Requirements:
+- place the download action near Analyse another report button this button will populate after the analye at the bottom of he screen.
+- make it obvious that the report can be downloaded
+- use a label like `Download Analysis PDF`
+- disable or hide it gracefully if analysis data is not yet available
+
+---
+
+## Technical Requirements
+
+### PDF generation
+Implement real PDF generation in the frontend or backend depending on the app architecture.
+Choose the cleanest approach based on the existing stack.
+
+Possible approaches include:
+- frontend PDF generation if content is already rendered client-side
+- backend PDF generation if server-side formatting is cleaner
+
+Need support for:
+- dynamic text rendering
+- structured sections
+- multiple pages
+- Unicode-safe rendering if needed
+- stable formatting
+
+Do not generate a `.md` file and rename it to `.pdf`.
+Generate an actual PDF document.
+
+### Reusable export architecture
+Build this as a shared export layer.
+Need reusable logic for:
+- document title
+- patient info
+- content sections
+- layout styling
+- file naming
+
+Suggested output filenames:
+- `medassist-lab-tests-<patient-name>.pdf`
+- `medassist-lab-report-analysis-<patient-name>.pdf`
+
+Sanitize patient name for filenames.
+
+### Content mapping
+Cursor should inspect the current data source for:
+- lab test recommendation content in AI Assistance tab
+- generated lab report analysis content in Lab Report Analysis section
+
+Then map that content into structured PDF sections instead of exporting raw component HTML blindly unless that is already clean and reliable.
+
+---
+
+## Design Expectations
+
+Use a polished healthcare-style visual format.
+The PDF should feel like a professional patient handout or report.
+
+Suggested style characteristics:
+- title in strong blue/teal tone
+- dark readable body text
+- light section background or divider separation
+- section headings with distinct color
+- enough white space
+- readable typography
+- visually calm and professional design
+
+Do not over-design it.
+Keep it clean, elegant, and medically appropriate.
+
+---
+
+## Cursor Implementation Tasks
+
+1. Inspect the current implementation of lab test recommendation download in the AI Assistance tab.
+2. Remove or replace the current `.md` export behavior.
+3. Implement PDF export for lab test recommendations.
+4. Create a reusable PDF document template/helper for MedAssist reports.
+5. Add header rendering with title and patient name.
+6. Use the heading `MedAssist Lab Tests` for the lab test recommendation export.
+7. Map the existing recommendation content into well-formatted PDF sections.
+8. Add section styling, side headings, spacing, and colors.
+9. Support multi-page PDF export if the recommendation content is long.
+10. Inspect the Lab Report Analysis section data structure.
+11. Add a new download button/tab in the Lab Report Analysis section.
+12. Implement PDF export for lab report analysis.
+13. Use the heading `MedAssist Lab Report Analysis` for the analysis export.
+14. Add patient name below the heading.
+15. Map all generated analysis content into structured report sections.
+16. Include precautions, advice, urgency, and doctor consultation guidance where available.
+17. Handle missing patient name gracefully.
+18. Add clean output filenames for both PDF types.
+19. Ensure the PDF works correctly on long content and multi-page cases.
+20. Test the exports in real user flow from both sections.
+
+---
+
+## Acceptance Criteria
+
+The work is complete when:
+- The AI Assistance tab no longer downloads lab test recommendations as `.md`.
+- Lab test recommendations download as a properly formatted PDF.
+- The lab test PDF includes the heading `MedAssist Lab Tests`.
+- The lab test PDF includes the patient name below the heading.
+- The lab test PDF renders the recommendation content in a clean structured format with headings and colors.
+- The Lab Report Analysis section includes a download button/tab for PDF export.
+- The lab report analysis exports as a properly formatted PDF.
+- The analysis PDF includes the heading `MedAssist Lab Report Analysis`.
+- The analysis PDF includes the patient name below the heading.
+- The analysis PDF includes all generated analysis content in a clear structured layout.
+- Both PDF formats support long content and multi-page output.
+- Both exports look professional and readable rather than plain dumped text.
+
+---
+
+## Notes For Cursor
+
+Prioritize a reusable PDF export design rather than two isolated implementations.
+The exported files should look like proper MedAssist documents.
+
+Do not keep markdown export for lab test recommendations.
+Replace it with actual PDF generation.
+
+For the lab report analysis export, make sure the generated report content is structured and readable in PDF form, especially for precautions, urgency, and doctor-consultation advice.

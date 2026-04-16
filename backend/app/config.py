@@ -38,8 +38,14 @@ class BaseConfig:
 
     # EURI API Gateway (OpenAI-compatible) — https://euron.one/euri
     EURI_BASE_URL = os.getenv("EURI_BASE_URL", "https://api.euron.one/api/v1/euri")
+    EURI_API_KEY = os.getenv("EURI_API_KEY", "")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", os.getenv("EURI_API_KEY", ""))
     OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", os.getenv("EURI_BASE_URL", "https://api.euron.one/api/v1/euri"))
+    # Chat/vision calls for these model names use EURI_BASE_URL + EURI_API_KEY (fallback: OPENAI_API_KEY)
+    _euri_models_raw = os.getenv("MODELS_ROUTE_VIA_EURI", "gpt-4o-mini")
+    MODELS_ROUTE_VIA_EURI = frozenset(
+        m.strip() for m in _euri_models_raw.split(",") if m.strip()
+    )
     OPENAI_ORG_ID = os.getenv("OPENAI_ORG_ID", "")
     OPENAI_MODEL_PRIMARY = os.getenv("OPENAI_MODEL_PRIMARY", "gpt-4o-mini")
     OPENAI_MODEL_FAST = os.getenv("OPENAI_MODEL_FAST", "gpt-4o-mini")
