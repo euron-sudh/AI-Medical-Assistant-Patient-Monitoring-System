@@ -322,6 +322,152 @@ def download_lab_report_analysis_pdf(report_id: str):
 
 
 # ---------------------------------------------------------------------------
+# X-Ray / MRI image analysis (Vision) + PDF export
+# ---------------------------------------------------------------------------
+
+
+@bp.route("/image/analyze", methods=["POST"])
+@jwt_required()
+def analyze_medical_image():
+    """Upload an X-ray/MRI image and run GPT-4o Vision analysis (sync)."""
+    if "file" not in request.files:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "No file provided"}}), 400
+
+    file = request.files["file"]
+    if not file.filename:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Empty filename"}}), 400
+
+    patient_id = request.form.get("patient_id")
+    title = request.form.get("title") or "Medical image"
+    if not patient_id:
+        return jsonify({
+            "error": {"code": "VALIDATION_ERROR", "message": "patient_id is required"},
+        }), 400
+
+    try:
+        patient_uuid = uuid.UUID(patient_id)
+    except ValueError:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Invalid patient ID"}}), 400
+
+    access_error = _check_patient_access(patient_id)
+    if access_error:
+        return access_error
+
+    file_bytes = file.read()
+    if not file_bytes:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Empty file"}}), 400
+
+    if len(file_bytes) > 15 * 1024 * 1024:
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "message": "File is too large (max 15 MB)"}}), 400
+
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    from app.services.image_analysis_service import ALLOWED_IMAGE_EXTS, analyze_xray_mri_image
+
+    if ext not in ALLOWED_IMAGE_EXTS:
+        return jsonify({
+            "error": {"code": "VALIDATION_ERROR", "message": "Use PNG, JPG, JPEG, or WEBP"},
+        }), 400
+
+    try:
+        analysis = analyze_xray_mri_image(image_bytes=file_bytes, ext=ext, model="gpt-4o")
+    except Exception as exc:
+        return jsonify({
+            "error": {"code": "IMAGE_ANALYSIS_ERROR", "message": str(exc)},
+        }), 502
+
+    # Persist as a standard report (report_type=imaging)
+    current_user_id = uuid.UUID(get_jwt_identity())
+    file_url = None
+    try:
+        from app.integrations.s3_client import s3_client
+
+        file_url = s3_client.upload_file(file_bytes, patient_id, ext)
+    except Exception as s3_err:
+        logger.warning("image_upload_s3_fallback: %s", s3_err)
+        upload_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "uploads", "reports", str(patient_id),
+        )
+        os.makedirs(upload_dir, exist_ok=True)
+        unique = uuid.uuid4().hex[:12]
+        fname = f"image_{unique}.{ext}"
+        filepath = os.path.join(upload_dir, fname)
+        with open(filepath, "wb") as f:
+            f.write(file_bytes)
+        file_url = f"local://{filepath}"
+
+    data = CreateReportRequest(
+        report_type="imaging",
+        title=title[:255],
+        content=None,
+        file_url=file_url,
+        file_type=ext,
+    )
+    report = report_service.create_report(patient_uuid, data, created_by=current_user_id)
+
+    from app.extensions import db
+    from app.models.report import MedicalReport
+
+    stmt_report = db.session.get(MedicalReport, uuid.UUID(report.id))
+    if stmt_report:
+        stmt_report.status = "completed"
+        stmt_report.ai_summary = (analysis.get("summary") or "")[:2000]
+        stmt_report.ai_analysis = {"image_analysis": analysis, "pipeline_version": 1}
+        stmt_report.updated_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+    return jsonify({
+        "report_id": report.id,
+        "image_analysis": analysis,
+    }), 200
+
+
+@bp.route("/<report_id>/image-analysis-pdf", methods=["GET"])
+@jwt_required()
+def download_image_analysis_pdf(report_id: str):
+    """Download the generated X-ray/MRI image analysis as a PDF."""
+    from app.extensions import db
+    from app.models.report import MedicalReport
+    from app.models.user import User
+    from app.utils.pdf_export import build_image_analysis_pdf
+
+    try:
+        report_uuid = uuid.UUID(report_id)
+    except ValueError:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Invalid report ID"}}), 400
+
+    report = db.session.get(MedicalReport, report_uuid)
+    if report is None:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": "Report not found"}}), 404
+
+    access_error = _check_patient_access(report.patient_id)
+    if access_error:
+        return access_error
+
+    analysis = report.ai_analysis or {}
+    if not analysis:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Report has no analysis to export yet"}}), 400
+
+    patient = db.session.get(User, report.patient_id)
+    patient_name = patient.full_name if patient else None
+
+    try:
+        pdf_bytes = build_image_analysis_pdf(patient_name=patient_name, analysis=analysis)
+    except Exception as exc:
+        return jsonify({"error": {"code": "PDF_EXPORT_ERROR", "message": str(exc)}}), 500
+
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    filename = f"medassist-image-analysis-{stamp}.pdf"
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=filename,
+        max_age=0,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Existing endpoints
 # ---------------------------------------------------------------------------
 

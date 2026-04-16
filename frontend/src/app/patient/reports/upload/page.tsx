@@ -5,6 +5,7 @@ import Link from "next/link";
 import apiClient from "@/lib/api-client";
 import {
   AlertTriangle,
+  Camera,
   CheckCircle2,
   FileUp,
   Loader2,
@@ -37,6 +38,18 @@ type StructuredItem = {
   confidence?: number;
 };
 
+type ImageAnalysis = {
+  summary?: string;
+  findings?: string[];
+  what_this_may_indicate?: string;
+  precautions?: string[];
+  next_steps?: string[];
+  urgency?: string;
+  consultation_recommendation?: string;
+  confidence_note?: string;
+  safety_disclaimer?: string;
+};
+
 const URGENCY_STYLES: Record<string, string> = {
   normal: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
   mild: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200",
@@ -57,6 +70,16 @@ export default function LabReportUploadPage() {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [analysisPdfLoading, setAnalysisPdfLoading] = useState(false);
 
+  // X-Ray / MRI image analysis (separate flow)
+  const [scanFile, setScanFile] = useState<File | null>(null);
+  const [scanPreviewUrl, setScanPreviewUrl] = useState<string | null>(null);
+  const [scanPhase, setScanPhase] = useState<Phase>("idle");
+  const [scanProgress, setScanProgress] = useState(0);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanReportId, setScanReportId] = useState<string | null>(null);
+  const [scanAnalysis, setScanAnalysis] = useState<ImageAnalysis | null>(null);
+  const [scanPdfLoading, setScanPdfLoading] = useState(false);
+
   const reset = useCallback(() => {
     setPhase("idle");
     setProgress(0);
@@ -68,7 +91,17 @@ export default function LabReportUploadPage() {
     setAnalysis(null);
     setAiSummary(null);
     setAnalysisPdfLoading(false);
-  }, []);
+
+    setScanPhase("idle");
+    setScanProgress(0);
+    setScanError(null);
+    setScanFile(null);
+    if (scanPreviewUrl) URL.revokeObjectURL(scanPreviewUrl);
+    setScanPreviewUrl(null);
+    setScanReportId(null);
+    setScanAnalysis(null);
+    setScanPdfLoading(false);
+  }, [scanPreviewUrl]);
 
   const downloadAnalysisPdf = useCallback(async () => {
     if (!reportId) return;
@@ -96,10 +129,44 @@ export default function LabReportUploadPage() {
     }
   }, [reportId]);
 
+  const downloadScanPdf = useCallback(async () => {
+    if (!scanReportId) return;
+    setScanPdfLoading(true);
+    setScanError(null);
+    try {
+      const res = await apiClient.get<Blob>(`/reports/${scanReportId}/image-analysis-pdf`, {
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `medassist-image-analysis-${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { error?: { message?: string } } } };
+      const msg =
+        ax.response?.data?.error?.message ??
+        (err as Error)?.message ??
+        "Failed to download image analysis PDF.";
+      setScanError(msg);
+    } finally {
+      setScanPdfLoading(false);
+    }
+  }, [scanReportId]);
+
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     setError(null);
     setFile(f ?? null);
+  };
+
+  const onScanFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    setScanError(null);
+    setScanFile(f);
+    if (scanPreviewUrl) URL.revokeObjectURL(scanPreviewUrl);
+    setScanPreviewUrl(f ? URL.createObjectURL(f) : null);
   };
 
   const runAnalyze = async () => {
@@ -165,6 +232,68 @@ export default function LabReportUploadPage() {
         ax.response?.data?.error?.message ??
         "Analysis failed. Try another file or try again later.";
       setError(msg);
+    }
+  };
+
+  const runScanAnalyze = async () => {
+    if (!scanFile) {
+      setScanError("Choose a scan image first.");
+      return;
+    }
+
+    const userStr = localStorage.getItem("user");
+    if (!userStr) {
+      setScanError("Please log in again.");
+      return;
+    }
+    const user = JSON.parse(userStr);
+    const patientId = user.id ?? user.patient_id;
+    if (!patientId) {
+      setScanError("Patient profile not found.");
+      return;
+    }
+
+    const ext = scanFile.name.split(".").pop()?.toLowerCase();
+    if (!ext || !["png", "jpg", "jpeg", "webp"].includes(ext)) {
+      setScanError("Use a PNG, JPG, JPEG, or WEBP image (max 15 MB).");
+      return;
+    }
+    if (scanFile.size > 15 * 1024 * 1024) {
+      setScanError("File is too large (max 15 MB).");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", scanFile);
+    formData.append("patient_id", patientId);
+    formData.append("title", scanFile.name.replace(/\.[^.]+$/, "") || "Medical image");
+
+    setScanPhase("processing");
+    setScanProgress(0);
+    setScanError(null);
+
+    try {
+      const res = await apiClient.post("/reports/image/analyze", formData, {
+        timeout: 180000,
+        onUploadProgress: (evt) => {
+          if (evt.total) {
+            setScanProgress(Math.min(99, Math.round((evt.loaded * 100) / evt.total)));
+          }
+        },
+      });
+
+      setScanProgress(100);
+      setScanReportId(res.data.report_id ?? null);
+      setScanAnalysis(res.data.image_analysis ?? null);
+      setScanPhase("success");
+    } catch (err: unknown) {
+      setScanPhase("error");
+      setScanProgress(0);
+      const ax = err as { response?: { data?: { error?: { message?: string } } } };
+      const msg =
+        ax.response?.data?.error?.message ??
+        "Image analysis failed. Try a clearer scan image or try again later.";
+      setScanError(msg);
     }
   };
 
@@ -272,6 +401,200 @@ export default function LabReportUploadPage() {
                   className="mt-2 text-xs font-medium underline"
                 >
                   Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">X-Ray / MRI Image Analysis</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Upload an X-ray or MRI scan image for AI-assisted interpretation. This is informational only
+            and not a final diagnosis—always confirm with a clinician or radiologist.
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Supported: PNG, JPG/JPEG, WEBP (max 15 MB).</p>
+        </div>
+
+        <div className="mt-6 space-y-4">
+          <label className="block">
+            <span className="text-sm font-medium text-foreground">Scan image</span>
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-4 py-8 text-sm text-muted-foreground transition-colors hover:bg-muted/50 sm:flex-1">
+                <Camera className="h-5 w-5" />
+                <span>{scanFile ? scanFile.name : "Click to choose scan image (PNG/JPG/WEBP)"}</span>
+                <input
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={onScanFileChange}
+                  disabled={scanPhase === "processing"}
+                />
+              </label>
+              {scanFile && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScanFile(null);
+                    if (scanPreviewUrl) URL.revokeObjectURL(scanPreviewUrl);
+                    setScanPreviewUrl(null);
+                    setScanError(null);
+                    setScanAnalysis(null);
+                    setScanReportId(null);
+                    setScanPhase("idle");
+                    setScanProgress(0);
+                  }}
+                  className="text-sm text-muted-foreground underline hover:text-foreground"
+                  disabled={scanPhase === "processing"}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </label>
+
+          {scanPreviewUrl && (
+            <div className="rounded-md border border-border bg-muted/10 p-3">
+              <p className="text-xs font-medium text-muted-foreground">Preview</p>
+              <img
+                src={scanPreviewUrl}
+                alt="Selected scan preview"
+                className="mt-2 max-h-[360px] w-full rounded-md object-contain"
+              />
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={runScanAnalyze}
+            disabled={!scanFile || scanPhase === "processing"}
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            {scanPhase === "processing" ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {scanProgress < 100 ? `Uploading… ${scanProgress}%` : "Analyzing image…"}
+              </>
+            ) : (
+              <>
+                <Camera className="h-4 w-4" />
+                Analyze scan
+              </>
+            )}
+          </button>
+
+          {scanError && (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-medium">Something went wrong</p>
+                <p className="mt-1">{scanError}</p>
+              </div>
+            </div>
+          )}
+
+          {scanPhase === "success" && scanAnalysis && (
+            <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Urgency
+                </span>
+                <span
+                  className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold capitalize ${
+                    URGENCY_STYLES[scanAnalysis.urgency ?? "moderate"] ?? "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {scanAnalysis.urgency ?? "moderate"}
+                </span>
+                {scanReportId && (
+                  <span className="text-xs text-muted-foreground">
+                    Saved as report #{scanReportId.slice(0, 8)}…
+                  </span>
+                )}
+              </div>
+
+              {scanAnalysis.summary && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-semibold text-foreground">Image analysis summary</h3>
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                    {scanAnalysis.summary}
+                  </p>
+                </div>
+              )}
+
+              {scanAnalysis.findings && scanAnalysis.findings.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-semibold text-foreground">Possible findings or anomalies</h3>
+                  <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-muted-foreground">
+                    {scanAnalysis.findings.map((x, i) => (
+                      <li key={i}>{x}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {scanAnalysis.what_this_may_indicate && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-semibold text-foreground">What this may indicate</h3>
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                    {scanAnalysis.what_this_may_indicate}
+                  </p>
+                </div>
+              )}
+
+              {scanAnalysis.precautions && scanAnalysis.precautions.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-semibold text-foreground">Precautions</h3>
+                  <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-muted-foreground">
+                    {scanAnalysis.precautions.map((x, i) => (
+                      <li key={i}>{x}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {scanAnalysis.next_steps && scanAnalysis.next_steps.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-semibold text-foreground">Next steps</h3>
+                  <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-muted-foreground">
+                    {scanAnalysis.next_steps.map((x, i) => (
+                      <li key={i}>{x}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {(scanAnalysis.consultation_recommendation || scanAnalysis.confidence_note) && (
+                <div className="mt-4 rounded-md border border-amber-200 bg-amber-50/90 p-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-100">
+                  {scanAnalysis.consultation_recommendation ? (
+                    <p>
+                      <strong>Consultation:</strong> {scanAnalysis.consultation_recommendation}
+                    </p>
+                  ) : null}
+                  {scanAnalysis.confidence_note ? (
+                    <p className={scanAnalysis.consultation_recommendation ? "mt-2" : ""}>
+                      <strong>Limitations:</strong> {scanAnalysis.confidence_note}
+                    </p>
+                  ) : null}
+                </div>
+              )}
+
+              {scanAnalysis.safety_disclaimer && (
+                <p className="mt-4 text-center text-xs text-muted-foreground">
+                  {scanAnalysis.safety_disclaimer}
+                </p>
+              )}
+
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={downloadScanPdf}
+                  disabled={!scanReportId || scanPdfLoading}
+                  className="w-full rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {scanPdfLoading ? "Preparing PDF…" : "Download Image Analysis PDF"}
                 </button>
               </div>
             </div>

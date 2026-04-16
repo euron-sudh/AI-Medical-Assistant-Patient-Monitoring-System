@@ -55,3 +55,7 @@ cypress/screenshots/
 # Build
 *.log
 instance/
+
+# Uploads
+backend/app/uploads/reports/
+backend/app/uploads/reports/*

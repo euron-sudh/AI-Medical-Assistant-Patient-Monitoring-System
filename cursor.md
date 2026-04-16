@@ -1386,3 +1386,353 @@ Do not keep markdown export for lab test recommendations.
 Replace it with actual PDF generation.
 
 For the lab report analysis export, make sure the generated report content is structured and readable in PDF form, especially for precautions, urgency, and doctor-consultation advice.
+
+# Cursor Task: Add X-Ray and MRI Image Analysis Feature in Report Tab Using GPT-4o Vision
+
+## Context
+
+This is for the same Med Assist application.
+There is already an existing **Lab Report Analysis** feature.
+Do **not** change or remove any of the existing lab report analysis behavior.
+
+Instead, add **one more separate feature** inside the **Report tab**.
+This new feature should allow the user to upload **X-ray images** or **MRI images** and get an AI-generated analysis based on the medical image.
+
+Use **GPT-4o Vision** to read the uploaded X-ray or MRI image and identify visible anomalies or concerns in the image.
+The feature should be added as a **separate upload box** inside the Report tab and should remain clearly separate from the current Lab Report Analysis flow.
+
+Important addition:
+The generated X-ray/MRI analysis should also be downloadable as a **PDF**.
+That PDF should be formatted like a professional medical report.
+The PDF heading should be `MedAssist Image Analysis Report`.
+Below that, include the **patient name**.
+Below the patient name, include the generated image-analysis content in a proper structured medical-report layout with suitable colors and section formatting.
+
+---
+
+## Goal
+
+Add a new medical-image analysis feature inside the Report tab so that a patient or user can:
+1. Upload an X-ray or MRI image.
+2. Have the image read using GPT-4o Vision.
+3. Receive an AI-generated analysis of visible anomalies or notable findings.
+4. Receive a patient-friendly explanation of what the image may indicate.
+5. Receive guidance on precautions and next steps where appropriate.
+6. Be advised to consult a doctor if the image suggests significant or concerning findings.
+7. Download the generated image analysis as a properly formatted PDF report.
+
+This should be an **additional feature**, not a replacement for the existing lab report analysis feature.
+
+---
+
+## Scope Rule
+
+Important rule for Cursor:
+- Do not modify or break the existing Lab Report Analysis feature.
+- Do not merge this into the existing lab report upload box.
+- Add this as a **new separate medical-image upload flow** inside the Report tab.
+- Keep both features available independently.
+
+Expected structure inside Report tab:
+- Existing Lab Report Analysis upload/flow remains unchanged.
+- New X-ray / MRI Image Analysis upload box is added below or beside it as a separate feature.
+
+---
+
+## New Feature Name
+
+Suggested UI name:
+- `X-Ray / MRI Image Analysis`
+
+Alternative acceptable labels:
+- `Medical Image Analysis`
+- `Scan Image Analysis`
+
+Preferred label:
+- `X-Ray / MRI Image Analysis`
+
+---
+
+## Supported Inputs
+
+The new feature should support uploads for common medical image formats such as:
+- JPG
+- JPEG
+- PNG
+- WEBP if already supported in the app
+
+If DICOM support is not currently available, do not force it in this task.
+This task is mainly for user-uploaded image files that can be previewed in the UI.
+
+If needed, explicitly state in the UI that standard image exports of X-ray/MRI scans are supported.
+
+---
+
+## Main Requirements
+
+### 1. Add separate upload box inside Report tab
+Create a new dedicated upload section for X-ray/MRI image analysis.
+
+Requirements:
+- visually separate from lab report upload
+- clear heading and description
+- support drag-and-drop if the app already supports it
+- support file picker upload
+- show supported file formats
+- allow image preview before analysis
+- allow replace/remove selected image
+
+The UI should make it obvious that this upload is for scan images, not text reports.
+
+---
+
+### 2. Use GPT-4o Vision for image analysis
+Use **GPT-4o Vision** to analyze the uploaded X-ray or MRI image.
+
+The model should inspect the image and return a medically careful, structured analysis describing:
+- notable visible findings,
+- possible anomalies,
+- areas of concern,
+- what the image may suggest,
+- what follow-up action may be appropriate.
+
+Do not present the output as a guaranteed diagnosis.
+The feature should behave as an AI interpretation assistant, not as a final radiology conclusion.
+
+---
+
+### 3. Analysis output requirements
+The generated response should be structured and easy to understand.
+
+Recommended output sections:
+- Image analysis summary
+- Possible findings or anomalies
+- What this may indicate
+- Recommended precautions / next steps
+- Urgency level
+- Doctor/radiologist consultation recommendation
+- Safety disclaimer
+
+The analysis should use patient-friendly language while still being medically cautious.
+Avoid highly technical wording unless necessary.
+
+---
+
+### 4. Urgency and escalation logic
+If the image appears to contain serious abnormalities, the AI should clearly recommend professional review.
+
+Need a severity layer such as:
+- normal / no obvious issue detected
+- mild concern
+- moderate concern
+- urgent review recommended
+- emergency attention recommended
+
+If findings appear serious, the output should explicitly encourage:
+- doctor consultation,
+- radiologist review,
+- emergency care if clinically urgent.
+
+The system should lean conservative in uncertain cases.
+
+---
+
+### 5. Safety guardrails
+This is a medical-image feature, so safety is important.
+
+Required behavior:
+- do not claim final diagnosis with certainty
+- clearly state that AI image review is informational only
+- recommend professional medical interpretation for suspicious findings
+- avoid false reassurance if confidence is low
+- avoid treatment or medication prescription logic in this feature unless that already exists under approved policy
+- add disclaimer that imaging results should be reviewed by a qualified doctor/radiologist
+
+The output should support triage-style guidance, not replace professional care.
+
+---
+
+### 6. Confidence / uncertainty handling
+Medical images may be blurry, low-quality, cropped, rotated, or incomplete.
+The app should handle uncertain input safely.
+
+Need logic for:
+- blurry image
+- low-resolution image
+- overexposed / underexposed scan photo
+- partial image upload
+- non-medical image uploaded by mistake
+- unsupported scan quality
+
+In such cases, the system should:
+- mention that image quality limits confidence,
+- avoid overconfident conclusions,
+- ask for a clearer image or doctor review,
+- still provide best-effort analysis if appropriate.
+
+---
+
+### 7. Keep existing feature unchanged
+Do not refactor the current Lab Report Analysis workflow unless needed for shared utilities only.
+
+Allowed:
+- shared reusable upload components if safely abstracted
+- shared result card styles if useful
+- shared disclaimer components
+
+Not allowed:
+- changing existing lab report logic unnecessarily
+- merging both uploads into one workflow
+- replacing lab report analysis with image analysis
+
+---
+
+### 8. Add PDF download for generated X-ray/MRI analysis
+The generated X-ray/MRI analysis should be downloadable as a **PDF** report.
+This is a separate download feature for the new image-analysis workflow.
+
+PDF requirements:
+- create a real PDF file, not markdown or plain text
+- heading must be `MedAssist Image Analysis Report`
+- show `Patient Name: <name>` below the heading
+- include the generated image-analysis sections below the patient details
+- use a professional medical report layout
+- include proper spacing, visual hierarchy, section blocks, and readable colors
+- support multi-page output if analysis content is long
+
+Recommended sections inside the PDF:
+1. Report Header
+2. Patient Name
+3. Summary
+4. Findings
+5. Possible Indication
+6. Precautions
+7. Next Steps
+8. Urgency Level
+9. Consultation Recommendation
+10. Disclaimer
+
+Styling direction:
+- professional medical-report appearance
+- calm healthcare-style colors such as blue/teal/neutral tones
+- strong header styling
+- section headings with color distinction
+- readable typography
+- good spacing for printing and digital viewing
+
+---
+
+## UI Requirements
+
+### Report tab layout
+The Report tab should now contain two separate analysis blocks:
+
+1. **Lab Report Analysis** (existing feature, unchanged)
+2. **X-Ray / MRI Image Analysis** (new feature)
+
+Recommended layout:
+- keep existing lab report upload area as-is
+- add a separate card/section below it or beside it depending on layout
+- each feature should have its own heading, description, upload area, and action button
+
+### New upload section UI
+The new image-analysis section should include:
+- title: `X-Ray / MRI Image Analysis`
+- short description explaining that users can upload X-ray or MRI images for AI-assisted interpretation
+- upload box
+- preview area
+- analyze button
+- loading state while image analysis is running
+- result section after analysis
+- error and retry states
+- download PDF button after analysis is available
+
+### Image preview
+Before analysis, show the uploaded image preview if possible.
+This helps the user confirm that the correct scan image was uploaded.
+
+---
+
+## Technical Requirements
+
+### Vision model integration
+Implement image analysis using GPT-4o Vision.
+
+Need a clean backend/service flow such as:
+1. upload image
+2. validate file type and size
+3. optionally resize/compress if needed
+4. send image to GPT-4o Vision
+5. receive structured analysis response
+6. normalize/store output
+7. render result in UI
+8. enable PDF export for the generated analysis
+
+### Request design
+The prompt sent to the model should instruct it to:
+- identify visible abnormalities carefully
+- describe findings conservatively
+- explain results in patient-friendly language
+- avoid overclaiming diagnosis
+- provide next-step guidance
+- explicitly advise doctor/radiologist consultation when needed
+- mention when image quality limits confidence
+
+### Structured output
+Prefer structured output format from the backend/service layer.
+Suggested fields:
+- `summary`
+- `findings`
+- `possible_indication`
+- `precautions`
+- `next_steps`
+- `urgency_level`
+- `consultation_recommendation`
+- `disclaimer`
+- `confidence_notes`
+
+This structured shape should drive the UI and the PDF output instead of rendering one raw text blob only.
+
+### Input validation
+Validate uploaded images for:
+- supported type
+- size limit
+- corrupt file handling
+- empty file handling
+- non-image rejection
+
+### Storage / processing
+If the app already stores uploaded report files, reuse that pattern if appropriate.
+If temporary processing is enough, keep the image handling minimal and secure.
+
+### PDF generation
+Implement actual PDF generation for the new X-ray/MRI analysis report.
+Do not generate markdown and rename it to PDF.
+The PDF should be generated from the structured analysis data and patient context.
+
+Suggested filename format:
+- `medassist-image-analysis-report-<patient-name>.pdf`
+
+Sanitize patient name before using it in the filename.
+
+---
+
+## Prompting Expectations
+
+The model prompt should guide the vision analysis to behave like a cautious medical assistant.
+
+Prompt expectations:
+- inspect the uploaded X-ray or MRI image for visible abnormalities or unusual features
+- summarize notable findings clearly
+- avoid definitive diagnosis unless extremely obvious and still phrase conservatively
+- mention uncertainty when the image quality is poor or the scan is insufficient
+- provide advice in patient-friendly wording
+- recommend qualified doctor/radiologist review for suspicious or uncertain cases
+- escalate clearly if the image suggests a potentially serious issue
+
+---
+
+## Result Display Requirements
+
+Show the result in a structured visual format.
+
