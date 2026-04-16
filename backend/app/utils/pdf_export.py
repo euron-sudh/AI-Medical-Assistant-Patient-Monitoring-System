@@ -249,3 +249,52 @@ def build_lab_report_analysis_pdf(*, patient_name: str | None, analysis: dict[st
         footer_note=str(disclaimer),
     )
 
+
+def build_image_analysis_pdf(*, patient_name: str | None, analysis: dict[str, Any]) -> bytes:
+    """Build PDF for X-Ray / MRI image analysis."""
+    img = (analysis or {}).get("image_analysis") or analysis or {}
+    if not isinstance(img, dict):
+        img = {}
+
+    def _lines(v: Any) -> list[str]:
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return [str(x) for x in v if str(x).strip()]
+        return [str(v)]
+
+    sections: list[PDFSection] = []
+    sections.append(PDFSection("Summary", _lines(img.get("summary"))))
+    sections.append(PDFSection("Possible findings / anomalies", _lines(img.get("findings"))))
+    sections.append(PDFSection("What this may indicate", _lines(img.get("what_this_may_indicate"))))
+    sections.append(PDFSection("Precautions", _lines(img.get("precautions"))))
+    sections.append(PDFSection("Next steps", _lines(img.get("next_steps"))))
+
+    urgency = str(img.get("urgency") or "").strip()
+    if urgency:
+        sections.append(PDFSection("Urgency level", [urgency]))
+
+    consult = str(img.get("consultation_recommendation") or "").strip()
+    if consult:
+        sections.append(PDFSection("Consultation recommendation", [consult]))
+
+    conf = str(img.get("confidence_note") or "").strip()
+    if conf:
+        sections.append(PDFSection("Confidence / limitations", [conf]))
+
+    disclaimer = str(img.get("safety_disclaimer") or "").strip() or (
+        "This AI image review is informational only and not a diagnosis. "
+        "Imaging should be interpreted by a qualified clinician/radiologist."
+    )
+
+    sections = [s for s in sections if any(x.strip() for x in s.body)]
+    if not sections:
+        sections = [PDFSection("Image analysis", ["No analysis content available yet."])]
+
+    return build_medassist_pdf(
+        title="MedAssist Image Analysis Report",
+        patient_name=(patient_name or "").strip() or "Patient",
+        sections=sections,
+        footer_note=disclaimer,
+    )
+
