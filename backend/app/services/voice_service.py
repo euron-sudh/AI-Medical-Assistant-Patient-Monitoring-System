@@ -1,4 +1,9 @@
-"""Voice service - speech-to-text and text-to-speech using OpenAI APIs."""
+"""Voice service - speech-to-text and text-to-speech using OpenAI APIs.
+
+Voice features (TTS, STT, Realtime) use a dedicated OpenAI API key/base URL
+so they hit the real OpenAI endpoint even when the rest of the platform uses
+the EURI gateway for chat/embedding models.
+"""
 
 import base64
 import os
@@ -11,7 +16,9 @@ from app.config import BaseConfig
 
 logger = structlog.get_logger(__name__)
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# Voice-specific key falls back to the general OPENAI_API_KEY
+VOICE_API_KEY = BaseConfig.OPENAI_VOICE_API_KEY or BaseConfig.OPENAI_API_KEY
+VOICE_BASE_URL = BaseConfig.OPENAI_VOICE_BASE_URL  # defaults to https://api.openai.com/v1
 OPENAI_WHISPER_MODEL = os.getenv("OPENAI_WHISPER_MODEL", "whisper-1")
 OPENAI_TTS_MODEL = os.getenv("OPENAI_TTS_MODEL", "tts-1")
 
@@ -33,7 +40,7 @@ class VoiceService:
             language: Optional ISO-639-1 language hint (e.g. 'en', 'hi', 'es').
                 When omitted Whisper auto-detects the language.
         """
-        if OPENAI_API_KEY:
+        if VOICE_API_KEY:
             try:
                 return self._transcribe_with_openai(audio_data, filename, language=language)
             except Exception as e:
@@ -46,7 +53,7 @@ class VoiceService:
             language=language,
         )
         return TranscribeResponse(
-            text="[Placeholder] Audio transcription would appear here. Configure OPENAI_API_KEY to enable.",
+            text="[Placeholder] Audio transcription would appear here. Configure OPENAI_VOICE_API_KEY to enable.",
             language=language or "en",
             duration_seconds=0.0,
             confidence=0.0,
@@ -54,7 +61,7 @@ class VoiceService:
 
     def synthesize(self, data: SynthesizeRequest) -> SynthesizeResponse:
         """Synthesize text to speech using OpenAI TTS API."""
-        if OPENAI_API_KEY:
+        if VOICE_API_KEY:
             try:
                 return self._synthesize_with_openai(data)
             except Exception as e:
@@ -63,8 +70,18 @@ class VoiceService:
         logger.info("voice_synthesize_placeholder", text_length=len(data.text), voice=data.voice)
         return SynthesizeResponse(
             audio_url=None, audio_base64=None, format="mp3",
-            message="[Placeholder] Audio synthesis not available. Configure OPENAI_API_KEY to enable.",
+            message="[Placeholder] Audio synthesis not available. Configure OPENAI_VOICE_API_KEY to enable.",
         )
+
+    def _get_voice_client(self):
+        """Return an OpenAI client configured for voice (TTS/STT).
+
+        Uses the dedicated voice API key and base URL so voice calls always
+        hit the real OpenAI endpoint, even when chat/embedding traffic is
+        routed through the EURI gateway.
+        """
+        from openai import OpenAI
+        return OpenAI(api_key=VOICE_API_KEY, base_url=VOICE_BASE_URL)
 
     def _transcribe_with_openai(
         self,
@@ -73,9 +90,7 @@ class VoiceService:
         language: str | None = None,
     ) -> TranscribeResponse:
         """Call OpenAI Whisper API for transcription."""
-        from openai import OpenAI
-        base_url = BaseConfig.OPENAI_BASE_URL or BaseConfig.EURI_BASE_URL
-        client = OpenAI(api_key=OPENAI_API_KEY, base_url=base_url) if base_url else OpenAI(api_key=OPENAI_API_KEY)
+        client = self._get_voice_client()
         audio_file = BytesIO(audio_data)
         audio_file.name = filename
         kwargs = {
@@ -93,9 +108,7 @@ class VoiceService:
 
     def _synthesize_with_openai(self, data: SynthesizeRequest) -> SynthesizeResponse:
         """Call OpenAI TTS API for speech synthesis."""
-        from openai import OpenAI
-        base_url = BaseConfig.OPENAI_BASE_URL or BaseConfig.EURI_BASE_URL
-        client = OpenAI(api_key=OPENAI_API_KEY, base_url=base_url) if base_url else OpenAI(api_key=OPENAI_API_KEY)
+        client = self._get_voice_client()
         response = client.audio.speech.create(
             model=OPENAI_TTS_MODEL, voice=data.voice, input=data.text, speed=data.speed,
         )

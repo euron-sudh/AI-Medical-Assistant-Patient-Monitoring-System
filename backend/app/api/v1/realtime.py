@@ -2,6 +2,10 @@
 
 Provides an authenticated endpoint to mint an ephemeral OpenAI Realtime session
 token for the frontend. This keeps the server API key off the client.
+
+Voice features use a dedicated OpenAI API key (OPENAI_VOICE_API_KEY) so they
+always hit the real OpenAI endpoint, even when the rest of the platform routes
+through the EURI gateway.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ import requests
 from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
+from app.config import BaseConfig
 from app.integrations.openai_client import OpenAIClientError
 from app.middleware.auth_middleware import require_role
 from app.services.lab_recommendation_service import generate_lab_report_markdown, utc_now_iso
@@ -84,12 +89,15 @@ REQUEST_LAB_TOOL: dict[str, Any] = {
 }
 
 
-def _openai_base_url() -> str:
-    # If OPENAI_BASE_URL is configured (or EURI), honor it; otherwise default OpenAI.
-    base = os.getenv("OPENAI_BASE_URL") or os.getenv("EURI_BASE_URL") or "https://api.openai.com"
+def _voice_base_url() -> str:
+    """Return the base URL for OpenAI voice/realtime endpoints.
+
+    Uses the dedicated voice base URL which defaults to https://api.openai.com/v1,
+    ensuring voice traffic always hits the real OpenAI API.
+    """
+    base = BaseConfig.OPENAI_VOICE_BASE_URL or "https://api.openai.com/v1"
     base = base.rstrip("/")
-    # Allow users to set OPENAI_BASE_URL as either "https://api.openai.com" or
-    # "https://api.openai.com/v1" without double-appending /v1 below.
+    # Strip /v1 suffix since the caller appends /v1/realtime/sessions
     if base.endswith("/v1"):
         base = base[:-3]
     return base
@@ -100,7 +108,7 @@ def _openai_base_url() -> str:
 @require_role(["patient"])
 def create_realtime_session():
     """Create an ephemeral Realtime session for the authenticated patient."""
-    api_key = os.getenv("OPENAI_API_KEY") or ""
+    api_key = BaseConfig.OPENAI_VOICE_API_KEY or BaseConfig.OPENAI_API_KEY or ""
     if not api_key:
         return jsonify({"error": {"code": "CONFIG_ERROR", "message": "OPENAI_API_KEY not configured"}}), 500
 
@@ -173,7 +181,7 @@ def create_realtime_session():
 
     try:
         res = requests.post(
-            f"{_openai_base_url()}/v1/realtime/sessions",
+            f"{_voice_base_url()}/v1/realtime/sessions",
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
