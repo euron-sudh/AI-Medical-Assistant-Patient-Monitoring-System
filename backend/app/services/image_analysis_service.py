@@ -9,6 +9,7 @@ import base64
 import io
 import json
 import logging
+import re
 from typing import Any
 
 from app.integrations.openai_client import openai_client
@@ -18,6 +19,26 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_IMAGE_EXTS = {"png", "jpg", "jpeg", "webp"}
 ALLOWED_URGENCY = {"normal", "mild", "moderate", "urgent", "emergency"}
+
+_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.IGNORECASE)
+
+
+def _extract_json_text(raw: str) -> str:
+    """Extract a JSON object from model output (handles ```json fences)."""
+    txt = (raw or "").strip()
+    if not txt:
+        return ""
+
+    # Strip single leading/trailing code fences if present.
+    if "```" in txt:
+        txt = _FENCE_RE.sub("", txt).strip()
+
+    # If extra prose sneaks in, try to slice the first JSON object.
+    start = txt.find("{")
+    end = txt.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        return txt[start : end + 1].strip()
+    return txt
 
 
 def _normalize_analysis(obj: dict[str, Any]) -> dict[str, Any]:
@@ -112,7 +133,7 @@ def analyze_xray_mri_image(*, image_bytes: bytes, ext: str, model: str = "gpt-4o
 
     raw = (res.content or "").strip()
     try:
-        parsed = json.loads(raw)
+        parsed = json.loads(_extract_json_text(raw))
         if isinstance(parsed, dict):
             return _normalize_analysis(parsed)
     except Exception:
@@ -120,7 +141,7 @@ def analyze_xray_mri_image(*, image_bytes: bytes, ext: str, model: str = "gpt-4o
 
     # Fallback: keep a safe minimal structure.
     return _normalize_analysis({
-        "summary": raw[:1800],
+        "summary": _extract_json_text(raw)[:1800],
         "findings": [],
         "what_this_may_indicate": "",
         "precautions": [],
