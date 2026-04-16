@@ -6,12 +6,14 @@ token for the frontend. This keeps the server API key off the client.
 
 from __future__ import annotations
 
+import io
 import os
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
-from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask import Blueprint, jsonify, request, send_file
+from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.integrations.openai_client import OpenAIClientError
 from app.middleware.auth_middleware import require_role
@@ -232,4 +234,54 @@ def create_lab_recommendations():
         "report_markdown": report_markdown,
         "generated_at": utc_now_iso(),
     }), 200
+
+
+@bp.route("/lab-recommendations/pdf", methods=["POST"])
+@jwt_required()
+@require_role(["patient"])
+def create_lab_recommendations_pdf():
+    """Generate lab test suggestions and return a formatted PDF."""
+    from app.extensions import db
+    from app.models.user import User
+    from app.utils.pdf_export import build_lab_tests_pdf
+
+    user_id = get_jwt_identity()
+    body: dict[str, Any] = request.get_json(silent=True) or {}
+    report_markdown_in = (body.get("report_markdown") or "").strip()
+    transcript = (body.get("transcript") or "").strip()
+    if not report_markdown_in and not transcript:
+        return jsonify({
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "report_markdown or transcript is required",
+            },
+        }), 400
+
+    user = db.session.get(User, user_id)
+    patient_name = user.full_name if user else None
+
+    try:
+        report_markdown = report_markdown_in or generate_lab_report_markdown(transcript)
+        pdf_bytes = build_lab_tests_pdf(
+            patient_name=patient_name,
+            recommendation_markdown=report_markdown,
+        )
+    except OpenAIClientError as exc:
+        return jsonify({
+            "error": {"code": "LAB_GENERATION_ERROR", "message": str(exc)},
+        }), 502
+    except Exception as exc:
+        return jsonify({
+            "error": {"code": "PDF_EXPORT_ERROR", "message": str(exc)},
+        }), 500
+
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    filename = f"medassist-lab-tests-{stamp}.pdf"
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=filename,
+        max_age=0,
+    )
 

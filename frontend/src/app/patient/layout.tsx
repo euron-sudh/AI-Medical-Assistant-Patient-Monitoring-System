@@ -14,6 +14,7 @@ const navItems = [
   { href: "/patient/symptoms", label: "Symptom Checker", icon: "S" },
   { href: "/patient/vitals", label: "My Vitals", icon: "V" },
   { href: "/patient/reports", label: "Reports", icon: "R" },
+  { href: "/patient/reports/upload", label: "Lab upload", icon: "↑" },
   { href: "/patient/medications", label: "Medications", icon: "M" },
   { href: "/patient/appointments", label: "Appointments", icon: "A" },
   { href: "/patient/chat", label: "AI Chat", icon: "C" },

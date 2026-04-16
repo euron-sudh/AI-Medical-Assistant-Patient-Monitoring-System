@@ -27,8 +27,7 @@ __all__ = ["process_medical_report", "generate_report_summary", "extract_lab_val
 def _extract_text_from_bytes(file_bytes: bytes, file_type: str | None) -> str:
     """Extract text from raw file bytes.
 
-    This is a placeholder for a real OCR / PDF-text-extraction pipeline
-    (e.g. Tesseract, AWS Textract, pdf2image + pytesseract).
+    Uses hybrid native PDF + OCR pipeline for pdf/png/jpg; plain decode for text files.
 
     Args:
         file_bytes: Raw bytes of the uploaded file.
@@ -37,15 +36,27 @@ def _extract_text_from_bytes(file_bytes: bytes, file_type: str | None) -> str:
     Returns:
         Extracted plain-text content.
     """
-    # Attempt naive UTF-8 decode for text-based files
     if file_type in ("txt", "csv", "json"):
         try:
             return file_bytes.decode("utf-8")
         except UnicodeDecodeError:
             pass
 
-    # For PDF/image files a real implementation would use OCR here
-    return f"[Extracted text placeholder — {len(file_bytes)} bytes, type={file_type}]"
+    ext = (file_type or "bin").lower().lstrip(".")
+    fname = f"upload.{ext}" if ext else "upload.bin"
+    from app.services.lab_report.hybrid_extract import hybrid_extract, validate_lab_file
+
+    ok, err = validate_lab_file(fname, file_bytes)
+    if ok is None:
+        logger.warning("hybrid_extract_skip: %s", err)
+        return f"[Invalid or unsupported file: {err}]"
+
+    try:
+        result = hybrid_extract(file_bytes, ok)
+        return result.cleaned_text or result.raw_text
+    except Exception as exc:
+        logger.warning("hybrid_extract_failed: %s", exc)
+        return f"[Extraction failed — {len(file_bytes)} bytes, type={file_type}]"
 
 
 def _generate_ai_summary(report_type: str, text_content: str) -> str:

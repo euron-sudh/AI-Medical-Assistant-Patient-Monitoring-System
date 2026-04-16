@@ -131,6 +131,15 @@ function downloadMarkdownFile(content: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function useVoiceRealtime() {
   const [status, setStatus] = useState<VoiceSessionStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -293,7 +302,15 @@ export function useVoiceRealtime() {
       });
       const md = res.data.report_markdown;
       setLabReport(md);
-      downloadMarkdownFile(md, `med-assist-lab-report-${new Date().toISOString().slice(0, 10)}.md`);
+      const pdfRes = await apiClient.post<Blob>(
+        "/realtime/lab-recommendations/pdf",
+        { report_markdown: md },
+        { responseType: "blob" },
+      );
+      downloadBlob(
+        pdfRes.data,
+        `medassist-lab-tests-${new Date().toISOString().slice(0, 10)}.pdf`,
+      );
     } catch (e: unknown) {
       const data = (e as { response?: { data?: { error?: { message?: string } } } })?.response?.data;
       const msg = data?.error?.message ?? (e as Error)?.message ?? "Failed to generate lab report.";

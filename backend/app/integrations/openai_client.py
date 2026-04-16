@@ -101,6 +101,39 @@ class OpenAIClient:
             client_kwargs["organization"] = self._org_id
 
         self._client = OpenAI(**client_kwargs)
+        # Lazy SDK client for models routed via EURI (see _sdk_client_for_model)
+        self._euri_sdk_client: OpenAI | None = None
+
+    def _sdk_client_for_model(self, model: str) -> OpenAI:
+        """Return the OpenAI SDK client to use for this model name.
+
+        Models listed in BaseConfig.MODELS_ROUTE_VIA_EURI always use EURI_BASE_URL
+        and EURI_API_KEY (with fallback to the instance API key) so gpt-4o-mini can
+        use OpenAI.com for other stacks while this model goes through Euri.
+        """
+        if model in BaseConfig.MODELS_ROUTE_VIA_EURI:
+            if self._euri_sdk_client is None:
+                euri_base = BaseConfig.EURI_BASE_URL.rstrip("/")
+                euri_key = (BaseConfig.EURI_API_KEY or self._api_key or "").strip()
+                if not euri_key:
+                    logger.warning(
+                        "euri_routed_model_missing_key",
+                        model=model,
+                        hint="Set EURI_API_KEY for Euri; OPENAI_API_KEY is only used if EURI_API_KEY is empty",
+                    )
+                # Do not send OpenAI organization header to Euri
+                self._euri_sdk_client = OpenAI(
+                    api_key=euri_key,
+                    base_url=euri_base,
+                    timeout=self._timeout,
+                )
+                logger.info(
+                    "openai_client_euri_route",
+                    model=model,
+                    base_url=euri_base,
+                )
+            return self._euri_sdk_client
+        return self._client
 
     def chat_completion(
         self,
@@ -142,11 +175,13 @@ class OpenAIClient:
         if response_format:
             kwargs["response_format"] = response_format
 
+        sdk = self._sdk_client_for_model(model)
+
         return self._retry_request(
             operation="chat_completion",
             request_id=request_id,
             model=model,
-            call_fn=lambda: self._client.chat.completions.create(**kwargs),
+            call_fn=lambda: sdk.chat.completions.create(**kwargs),
         )
 
     def _retry_request(
@@ -293,6 +328,48 @@ class OpenAIClient:
             Delay in seconds.
         """
         return self.BASE_RETRY_DELAY * (2 ** attempt)
+
+    def vision_transcribe_document(
+        self,
+        image_png_parts: list[bytes],
+        *,
+        instruction: str,
+        model: str | None = None,
+        max_tokens: int = 4096,
+    ) -> str:
+        """OCR / transcribe document pages via a vision-capable chat model.
+
+        Args:
+            image_png_parts: One PNG byte blob per page (or region).
+            instruction: Prompt for faithful transcription (tables, units).
+            model: Vision model; defaults to primary model (e.g. gpt-4o).
+            max_tokens: Max completion tokens.
+
+        Returns:
+            Concatenated transcribed text from the model.
+        """
+        import base64
+
+        if not image_png_parts:
+            return ""
+
+        vision_model = model or self._default_model
+        parts: list[dict[str, Any]] = [{"type": "text", "text": instruction}]
+        for png in image_png_parts:
+            b64 = base64.standard_b64encode(png).decode("ascii")
+            parts.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/png;base64,{b64}"},
+            })
+
+        messages: list[dict[str, Any]] = [{"role": "user", "content": parts}]
+        response = self.chat_completion(
+            messages=messages,
+            model=vision_model,
+            temperature=0.1,
+            max_tokens=max_tokens,
+        )
+        return (response.content or "").strip()
 
 
 # Module-level singleton — import and use across the application

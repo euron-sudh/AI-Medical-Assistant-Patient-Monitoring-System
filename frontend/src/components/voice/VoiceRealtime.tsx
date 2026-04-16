@@ -353,7 +353,7 @@ export function VoiceControlsPanel({ voice }: Props) {
             ) : (
               <Download className="h-4 w-4 text-muted-foreground" />
             )}
-            Download lab test
+            Download lab tests PDF
           </button>
           {labReportError ? (
             <p className="rounded-lg bg-red-50 px-2 py-1.5 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300">
