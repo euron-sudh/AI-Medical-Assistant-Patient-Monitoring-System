@@ -47,6 +47,7 @@ class AppointmentResponse(BaseModel):
     doctor_id: str
     patient_name: str | None = None
     doctor_name: str | None = None
+    doctor_specialization: str | None = None
     appointment_type: str
     status: str
     scheduled_at: datetime

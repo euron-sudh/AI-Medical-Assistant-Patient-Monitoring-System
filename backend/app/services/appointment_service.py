@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from app.extensions import db
 from app.models.appointment import Appointment
+from app.models.doctor import DoctorProfile
 from app.schemas.appointment_schema import (
     AppointmentResponse,
     CancelAppointmentRequest,
@@ -476,13 +477,19 @@ class AppointmentService:
 
         patient_name = None
         doctor_name = None
+        doctor_specialization = None
         try:
             patient = db.session.get(User, appointment.patient_id)
             if patient:
                 patient_name = f"{patient.first_name} {patient.last_name}"
             doctor = db.session.get(User, appointment.doctor_id)
             if doctor:
-                doctor_name = f"{doctor.first_name} {doctor.last_name}"
+                doctor_name = f"Dr. {doctor.first_name} {doctor.last_name}"
+            prof = db.session.execute(
+                select(DoctorProfile).where(DoctorProfile.user_id == appointment.doctor_id)
+            ).scalar_one_or_none()
+            if prof:
+                doctor_specialization = prof.specialization
         except Exception:
             pass
 
@@ -492,6 +499,7 @@ class AppointmentService:
             doctor_id=str(appointment.doctor_id),
             patient_name=patient_name,
             doctor_name=doctor_name,
+            doctor_specialization=doctor_specialization,
             appointment_type=appointment.appointment_type,
             status=appointment.status,
             scheduled_at=appointment.scheduled_at,

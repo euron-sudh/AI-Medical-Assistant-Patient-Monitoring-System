@@ -25,6 +25,7 @@ from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
 from app.extensions import db
 from app.models.user import User
+from app.models.doctor import DoctorProfile
 from app.models.audit_log import AuditLog
 from app.models.conversation import Conversation
 from app.models.alert import MonitoringAlert
@@ -162,7 +163,11 @@ def update_user(user_id: str):
 @bp.route("/users", methods=["POST"])
 @jwt_required()
 def create_user():
-    """Create a new user (admin can create doctors/nurses)."""
+    """Create a new user (admin can create doctors/nurses).
+
+    For role ``doctor``, ``specialization`` and ``license_number`` are required;
+    a ``DoctorProfile`` row is created automatically.
+    """
     err = _require_admin()
     if err:
         return err
@@ -173,23 +178,64 @@ def create_user():
     if missing:
         return jsonify({"error": {"code": "VALIDATION_ERROR", "message": f"Missing fields: {', '.join(missing)}"}}), 400
 
+    role = data["role"]
+    if role not in ("patient", "doctor", "nurse", "admin"):
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "message": "Invalid role"}}), 400
+
     if User.query.filter_by(email=data["email"]).first():
         return jsonify({"error": {"code": "CONFLICT", "message": "Email already registered"}}), 409
 
+    if role == "doctor":
+        spec = (data.get("specialization") or "").strip()
+        lic = (data.get("license_number") or "").strip()
+        if not spec or not lic:
+            return jsonify({
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "Doctors require specialization and license_number",
+                },
+            }), 400
+
+    phone_raw = data.get("phone")
+    phone_val = str(phone_raw).strip()[:20] if phone_raw not in (None, "") else None
+
     user = User(
-        email=data["email"],
-        first_name=data["first_name"],
-        last_name=data["last_name"],
-        role=data["role"],
-        phone=data.get("phone"),
+        email=data["email"].strip().lower(),
+        first_name=data["first_name"].strip(),
+        last_name=data["last_name"].strip(),
+        role=role,
+        phone=phone_val,
         is_active=True,
         is_verified=True,
     )
     user.set_password(data["password"])
     db.session.add(user)
+    db.session.flush()
+
+    if role == "doctor":
+        yoe = None
+        if data.get("years_of_experience") is not None:
+            try:
+                yoe = int(data["years_of_experience"])
+            except (TypeError, ValueError):
+                yoe = None
+        dept_raw = data.get("department")
+        dept = str(dept_raw).strip()[:100] if dept_raw not in (None, "") else None
+        lic_state_raw = data.get("license_state")
+        lic_state = str(lic_state_raw).strip()[:5] if lic_state_raw not in (None, "") else None
+        profile = DoctorProfile(
+            user_id=user.id,
+            specialization=spec[:100],
+            license_number=lic[:50],
+            license_state=lic_state,
+            years_of_experience=yoe,
+            department=dept,
+        )
+        db.session.add(profile)
+
     db.session.commit()
 
-    _log_audit("create", "user", resource_id=user.id, details={"role": data["role"]})
+    _log_audit("create", "user", resource_id=user.id, details={"role": role})
     return jsonify(_user_to_dict(user)), 201
 
 

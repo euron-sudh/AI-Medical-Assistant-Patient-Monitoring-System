@@ -10,6 +10,7 @@ interface Appointment {
   patient_id: string;
   doctor_id: string;
   doctor_name?: string;
+  doctor_specialization?: string | null;
   doctor?: {
     first_name?: string;
     last_name?: string;
@@ -90,8 +91,11 @@ export default function AppointmentsPage() {
       if (a.doctor.first_name)
         return `Dr. ${a.doctor.first_name} ${a.doctor.last_name ?? ""}`.trim();
     }
-    return "Doctor";
+    return "Doctor (details unavailable)";
   };
+
+  const getDoctorSpecialty = (a: Appointment): string | undefined =>
+    a.doctor_specialization ?? a.doctor?.specialization;
 
   const formatDateTime = (dt: string): string => {
     const d = new Date(dt);
@@ -187,6 +191,7 @@ export default function AppointmentsPage() {
                     key={appt.id}
                     appt={appt}
                     doctorName={getDoctorName(appt)}
+                    doctorSpecialty={getDoctorSpecialty(appt)}
                     formatDateTime={formatDateTime}
                   />
                 ))}
@@ -210,6 +215,7 @@ export default function AppointmentsPage() {
                     key={appt.id}
                     appt={appt}
                     doctorName={getDoctorName(appt)}
+                    doctorSpecialty={getDoctorSpecialty(appt)}
                     formatDateTime={formatDateTime}
                   />
                 ))}
@@ -225,10 +231,12 @@ export default function AppointmentsPage() {
 function AppointmentCard({
   appt,
   doctorName,
+  doctorSpecialty,
   formatDateTime,
 }: {
   appt: Appointment;
   doctorName: string;
+  doctorSpecialty?: string;
   formatDateTime: (dt: string) => string;
 }) {
   return (
@@ -236,8 +244,8 @@ function AppointmentCard({
       <div className="flex items-start justify-between">
         <div>
           <h3 className="text-sm font-semibold text-foreground">{doctorName}</h3>
-          {appt.doctor?.specialization && (
-            <p className="text-xs text-muted-foreground">{appt.doctor.specialization}</p>
+          {doctorSpecialty && (
+            <p className="text-xs text-muted-foreground">{doctorSpecialty}</p>
           )}
         </div>
         <div className="flex gap-2">
