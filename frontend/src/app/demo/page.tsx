@@ -33,25 +33,29 @@ interface Scene {
 type VoiceOption = "alloy" | "nova";
 
 /* ==========================================================================
-   TTS SERVICE -- EURI API (sarvam-tts model, high-quality AI voice)
+   TTS SERVICE -- OpenAI TTS API (tts-1 model)
    ========================================================================== */
 
-const EURI_TTS_URL = "https://api.euron.one/api/v1/euri/audio/speech";
-const EURI_API_KEY =
-  "euri-1359066cf23e5b59f64abda2da199c73046b7ba3910a018cdbdcb5ae3a13396d";
+const OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech";
 
 async function fetchTTSAudio(
   text: string,
-  _voice: VoiceOption,
+  voice: VoiceOption,
 ): Promise<ArrayBuffer | null> {
+  // Use the dedicated voice API key injected at build time
+  const apiKey = process.env.NEXT_PUBLIC_OPENAI_VOICE_API_KEY;
+  if (!apiKey) {
+    console.warn("NEXT_PUBLIC_OPENAI_VOICE_API_KEY not configured — TTS disabled");
+    return null;
+  }
   try {
-    const res = await fetch(EURI_TTS_URL, {
+    const res = await fetch(OPENAI_TTS_URL, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${EURI_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ model: "sarvam-tts", voice: "alloy", input: text }),
+      body: JSON.stringify({ model: "tts-1", voice: voice || "alloy", input: text }),
     });
     if (!res.ok) {
       console.error("TTS API error:", res.status, await res.text().catch(() => ""));

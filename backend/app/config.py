@@ -51,6 +51,12 @@ class BaseConfig:
     OPENAI_MODEL_FAST = os.getenv("OPENAI_MODEL_FAST", "gpt-4o-mini")
     OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-large")
 
+    # Voice-specific OpenAI credentials — uses real OpenAI for TTS/STT/Realtime
+    # since EURI gateway does not support voice models reliably.
+    # Falls back to the general OPENAI_API_KEY / OPENAI_BASE_URL when not set.
+    OPENAI_VOICE_API_KEY = os.getenv("OPENAI_VOICE_API_KEY", "")
+    OPENAI_VOICE_BASE_URL = os.getenv("OPENAI_VOICE_BASE_URL", "https://api.openai.com/v1")
+
     # Pinecone
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
     PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT", "")
