@@ -19,7 +19,6 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
     { label: "Medications", href: "/patient/medications" },
     { label: "Appointments", href: "/patient/appointments" },
     { label: "Care Plan", href: "/patient/care-plan" },
-    { label: "Chat", href: "/patient/chat" },
   ],
   doctor: [
     { label: "Dashboard", href: "/doctor" },

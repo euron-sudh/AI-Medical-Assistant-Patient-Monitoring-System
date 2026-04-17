@@ -46,6 +46,17 @@ def create_app(config_name: str | None = None) -> Flask:
     def health_check():
         return jsonify({"status": "healthy", "service": "medassist-ai-backend"}), 200
 
+    # Local / Docker: ensure demo doctors exist so booking & GET /doctors work even when
+    # the full wsgi empty-DB seed did not run.
+    if os.getenv("SKIP_DEMO_DOCTORS", "").lower() not in ("1", "true", "yes"):
+        with app.app_context():
+            try:
+                from app.ensure_demo_doctors import ensure_demo_doctors_exist
+
+                ensure_demo_doctors_exist()
+            except Exception as exc:
+                app.logger.warning("ensure_demo_doctors_exist: %s", exc)
+
     return app
 
 

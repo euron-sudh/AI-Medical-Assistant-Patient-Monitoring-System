@@ -94,6 +94,17 @@ def create_appointment():
         }), 403
 
     try:
+        uuid.UUID(data.patient_id)
+        uuid.UUID(data.doctor_id)
+    except ValueError:
+        return jsonify({
+            "error": {
+                "code": "BAD_REQUEST",
+                "message": "Invalid patient_id or doctor_id. Use the doctor's user account id, not the profile id.",
+            },
+        }), 400
+
+    try:
         appointment = appointment_service.create_appointment(data, created_by=current_user_id)
     except ValueError as e:
         return jsonify({"error": {"code": "CONFLICT", "message": str(e)}}), 409

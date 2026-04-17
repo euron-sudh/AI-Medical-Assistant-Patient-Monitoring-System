@@ -597,18 +597,6 @@ export default function PatientDashboard() {
               <p className="text-xs text-muted-foreground">Medical reports & labs</p>
             </div>
           </a>
-          <a
-            href="/patient/chat"
-            className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 shadow-sm transition-colors hover:bg-accent"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-blue-100 text-sm font-bold text-blue-600">
-              C
-            </span>
-            <div>
-              <p className="text-sm font-medium text-foreground">AI Chat</p>
-              <p className="text-xs text-muted-foreground">Ask a health question</p>
-            </div>
-          </a>
         </div>
       </div>
 
