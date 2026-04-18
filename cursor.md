@@ -2303,3 +2303,323 @@ The most important requirements are:
 3. patient name + doctor name + date + time visible,
 4. admin can add, edit, and delete appointments,
 5. clean integration with current admin design and architecture.
+# Cursor Task: Add Appointment Email Trigger System Using Google SMTP
+
+## Context
+
+This is for the Med Assist application.
+I want to integrate an email trigger system for appointment booking and confirmation flow.
+
+When a patient books an appointment:
+1. An email should be sent to the patient with all appointment booking details.
+2. An email should also be sent to the doctor with the booking details, including patient name and booked slot.
+3. The doctor email should clearly ask the doctor to confirm or deny the booking.
+4. Once the doctor accepts the booking, a confirmation email should be sent to the patient.
+
+For sending these emails, use **Google SMTP**.
+
+This feature should be implemented as an event-driven email notification flow tied to the appointment lifecycle.
+
+---
+
+## Goal
+
+Add an appointment email notification system so that:
+1. Patient receives a booking email immediately after appointment booking.
+2. Doctor receives a booking notification email immediately after patient booking.
+3. Doctor can review the booking and confirm or deny it.
+4. Patient receives a confirmation email after doctor approval.
+5. The email system uses Google SMTP for sending emails.
+
+---
+
+## Main Workflow
+
+### Step 1: Patient books appointment
+When a patient books an appointment in the application:
+- save the appointment booking details,
+- trigger a booking email to the patient,
+- trigger a booking email to the doctor.
+
+### Step 2: Doctor receives appointment email
+The doctor email should contain:
+- patient name,
+- appointment date,
+- appointment time,
+- booked slot,
+- any other necessary appointment details,
+- a request to confirm or deny the appointment.
+
+### Step 3: Doctor confirms or denies booking
+The system should support doctor action on the booking.
+At minimum, the booking should have a status such as:
+- pending
+- confirmed
+- denied
+
+When the doctor confirms the booking:
+- update appointment status,
+- trigger a confirmation email to the patient.
+
+If the doctor denies the booking:
+- keep the system ready for a denial email flow if needed,
+- or at minimum update booking status clearly in the system.
+
+---
+
+## Required Email Flows
+
+### 1. Patient booking email
+Trigger an email to the patient immediately after appointment booking.
+
+The patient booking email should include:
+- patient name
+- doctor name
+- appointment date
+- appointment time
+- slot details
+- booking status, such as pending confirmation if doctor approval is required
+- any instructions if applicable
+
+Suggested email purpose:
+- confirm that the booking request has been received
+- give the patient a record of what was booked
+- inform the patient that confirmation may still be pending doctor approval
+
+---
+
+### 2. Doctor booking notification email
+Trigger an email to the doctor immediately after a patient books an appointment.
+
+The doctor email should include:
+- doctor name
+- patient name
+- appointment date
+- appointment time
+- booked slot
+- notes/reason if available
+- clear call to action to confirm or deny the booking
+
+Suggested wording intent:
+- inform doctor that a patient has booked a slot
+- ask doctor to review the booking
+- ask doctor to confirm or deny the booking
+
+The message should clearly say something like:
+- `<Patient Name> has booked the slot. Please confirm or deny the booking.`
+
+---
+
+### 3. Patient booking confirmed email
+When the doctor accepts the booking, trigger another email to the patient.
+
+The confirmation email should include:
+- patient name
+- doctor name
+- confirmed appointment date
+- confirmed appointment time
+- booking status as confirmed
+- any additional instructions if applicable
+
+Suggested wording intent:
+- tell the patient that the appointment is now confirmed
+- reassure the patient that the booking has been accepted by the doctor
+
+Example meaning:
+- `Your appointment booking is confirmed.`
+
+---
+
+## Admin / Doctor Action Requirement
+
+The email flow depends on doctor confirmation.
+So the appointment system should support booking status changes.
+
+Expected appointment status flow:
+- `pending` when patient books
+- `confirmed` when doctor accepts
+- `denied` when doctor rejects
+
+The email triggers should be connected to these state transitions.
+
+---
+
+## Google SMTP Requirement
+
+Use **Google SMTP** as the email transport system.
+
+Expected implementation direction:
+- configure SMTP host, port, sender email, and authentication through environment variables
+- keep credentials secure
+- do not hardcode email username/password in source code
+- use reusable email service logic for sending appointment emails
+
+The feature should be production-friendly and structured properly.
+
+---
+
+## Configuration Requirements
+
+Add secure environment-based configuration for Google SMTP.
+
+Expected environment variables may include values such as:
+- SMTP host
+- SMTP port
+- SMTP username/email
+- SMTP password or app password
+- sender email/from name
+
+Do not expose credentials in frontend code.
+Keep SMTP logic on the backend/server side.
+
+---
+
+## Email Template Requirements
+
+Create reusable email templates for the appointment lifecycle.
+
+At minimum, create templates for:
+1. Patient booking received email
+2. Doctor booking notification email
+3. Patient booking confirmed email
+
+Template expectations:
+- clear subject lines
+- readable email body
+- professional healthcare-style wording
+- structured booking details
+- patient/doctor name included where relevant
+- consistent branding if the app already uses email branding
+
+Optional but recommended:
+- HTML email template with plain-text fallback
+
+---
+
+## Suggested Email Subjects
+
+Examples:
+- `Appointment Booking Received - MedAssist`
+- `New Appointment Booking Request - MedAssist`
+- `Appointment Confirmed - MedAssist`
+
+If denied email is added later, keep the design flexible so another template can be added easily.
+
+---
+
+## Backend Behavior Requirements
+
+The backend should trigger emails based on appointment events.
+
+Expected trigger points:
+- after successful patient appointment booking -> send patient email + doctor email
+- after doctor confirms appointment -> send patient confirmation email
+- after doctor denies appointment -> update status, and optionally support denial email in future
+
+Do not make the email logic tightly coupled to UI only.
+Implement it in backend/service/business logic where appointment status changes happen.
+
+---
+
+## UI/Feature Integration Expectations
+
+If the doctor confirms or denies via admin/doctor portal, the email trigger should happen from that action workflow.
+If the patient books through patient portal, the booking emails should trigger immediately after successful booking creation.
+
+The UI does not need to directly send emails itself.
+The UI should call backend actions, and backend should handle the email triggers.
+
+---
+
+## Logging and Error Handling
+
+Add proper handling for email delivery flow.
+
+Need:
+- success logging for sent emails
+- failure logging for SMTP/email errors
+- graceful handling if email sending fails
+- booking flow should not corrupt appointment data if email sending has an issue
+- optionally retry or queue logic if your architecture already supports it
+
+If email sending fails, the system should still preserve the booking state correctly.
+
+---
+
+## Security Requirements
+
+Because Google SMTP credentials are involved:
+- keep credentials in environment variables
+- never expose SMTP password to frontend
+- avoid logging sensitive credentials
+- use backend-only mail service implementation
+
+If using Google account app password flow, keep that setup documented for development and deployment.
+
+---
+
+## Suggested Data Fields Used in Emails
+
+Use available appointment data such as:
+- patient name
+- patient email
+- doctor name
+- doctor email
+- appointment date
+- appointment time
+- slot information
+- booking status
+- notes/reason if applicable
+
+These fields should be pulled from the appointment record and related patient/doctor data.
+
+---
+
+## Cursor Implementation Tasks
+
+1. Inspect the current appointment booking flow in the Med Assist app.
+2. Identify where patient booking is created in backend logic.
+3. Add Google SMTP configuration using environment variables.
+4. Create a reusable backend email service for sending appointment emails.
+5. Add patient booking received email template.
+6. Add doctor booking request email template.
+7. Add patient booking confirmed email template.
+8. Trigger patient and doctor emails immediately after a patient books an appointment.
+9. Ensure doctor email includes patient name, date, time, and request to confirm or deny booking.
+10. Identify where doctor confirms or denies appointment.
+11. On doctor confirmation, trigger patient confirmation email.
+12. Support appointment status transitions such as pending, confirmed, and denied.
+13. Add logging and error handling for SMTP/email failures.
+14. Keep credentials secure and backend-only.
+15. Test the complete workflow end to end.
+
+---
+
+## Acceptance Criteria
+
+The work is complete when:
+- Patient books an appointment and receives an email with booking details.
+- Doctor receives a booking email when a patient books an appointment.
+- Doctor email clearly shows patient name, appointment date, and appointment time.
+- Doctor email asks the doctor to confirm or deny the booking.
+- Appointment has a status flow such as pending, confirmed, and denied.
+- When doctor confirms the booking, patient receives a confirmation email.
+- Email sending is implemented using Google SMTP.
+- SMTP credentials are stored securely in environment variables.
+- Email logic is handled in backend/service logic, not exposed in frontend.
+- The feature works without breaking the current appointment flow.
+
+---
+
+## Notes For Cursor
+
+Build this as an appointment lifecycle notification system, not as isolated one-off email calls.
+Keep the architecture reusable so more appointment-related emails can be added later.
+
+The most important requirements are:
+1. patient booking email,
+2. doctor booking email,
+3. doctor confirm/deny flow,
+4. patient confirmation email,
+5. Google SMTP integration,
+6. secure backend implementation.

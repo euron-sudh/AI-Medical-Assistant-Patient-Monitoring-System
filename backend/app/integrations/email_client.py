@@ -30,6 +30,8 @@ class EmailClient:
             # No Flask app context (e.g. direct Celery worker invocation).
             import os
 
+            if key == "SMTP_USERNAME":
+                return os.getenv("SMTP_USERNAME") or os.getenv("SMTP_USER", default) or default
             return os.getenv(key, default) or default
 
     def _from_address(self) -> tuple[str, str]:
@@ -38,6 +40,7 @@ class EmailClient:
             self._config("SMTP_FROM_EMAIL")
             or self._config("SENDGRID_FROM_EMAIL")
             or self._config("SMTP_USERNAME")
+            or self._config("SMTP_USER")
             or "noreply@medassist.ai"
         )
         return name, sender
@@ -59,17 +62,21 @@ class EmailClient:
             logger.warning("email_send_skipped_no_recipients subject=%s", subject)
             return False
 
-        # Prefer SendGrid if configured
-        if self._config("SENDGRID_API_KEY"):
+        sendgrid_key = (self._config("SENDGRID_API_KEY") or "").strip()
+        smtp_host = (self._config("SMTP_HOST") or "").strip()
+
+        # Prefer SendGrid only when a non-empty key is set (whitespace-only counts as unset).
+        if sendgrid_key:
             return self._send_via_sendgrid(recipients, subject, html_body, text_body)
 
-        # Fall back to SMTP
-        if self._config("SMTP_HOST"):
+        # Fall back to SMTP (e.g. Gmail: smtp.gmail.com:587 + STARTTLS).
+        if smtp_host:
             return self._send_via_smtp(recipients, subject, html_body, text_body)
 
         # No provider configured — log and move on (dev mode)
-        logger.info(
-            "email_send_noop provider=none to=%s subject=%s",
+        logger.warning(
+            "email_send_noop provider=none to=%s subject=%s "
+            "(set SMTP_HOST + SMTP_USER/SMTP_USERNAME + SMTP_PASSWORD or SENDGRID_API_KEY)",
             ",".join(recipients),
             subject,
         )
@@ -87,13 +94,14 @@ class EmailClient:
             from sendgrid.helpers.mail import Content, Email, Mail, To  # type: ignore
         except ImportError:
             logger.warning("sendgrid_not_installed_falling_back_to_smtp")
-            if self._config("SMTP_HOST"):
+            if (self._config("SMTP_HOST") or "").strip():
                 return self._send_via_smtp(recipients, subject, html_body, text_body)
             return False
 
         try:
             from_name, from_addr = self._from_address()
-            sg = sendgrid.SendGridAPIClient(api_key=self._config("SENDGRID_API_KEY"))
+            api_key = (self._config("SENDGRID_API_KEY") or "").strip()
+            sg = sendgrid.SendGridAPIClient(api_key=api_key)
             mail = Mail(
                 from_email=Email(from_addr, from_name),
                 to_emails=[To(addr) for addr in recipients],
@@ -126,6 +134,7 @@ class EmailClient:
         username = self._config("SMTP_USERNAME")
         password = self._config("SMTP_PASSWORD")
         use_tls = str(self._config("SMTP_USE_TLS", "true")).lower() == "true"
+        use_ssl = str(self._config("SMTP_USE_SSL", "false")).lower() == "true"
 
         from_name, from_addr = self._from_address()
 
@@ -136,13 +145,20 @@ class EmailClient:
         msg.set_content(text_body or _html_to_text(html_body))
         msg.add_alternative(html_body, subtype="html")
 
+        def _login_and_send(server: smtplib.SMTP | smtplib.SMTP_SSL) -> None:
+            if username and password:
+                server.login(username, password)
+            server.send_message(msg)
+
         try:
-            with smtplib.SMTP(host, port, timeout=15) as server:
-                if use_tls:
-                    server.starttls()
-                if username and password:
-                    server.login(username, password)
-                server.send_message(msg)
+            if use_ssl:
+                with smtplib.SMTP_SSL(host, port, timeout=15) as server:
+                    _login_and_send(server)
+            else:
+                with smtplib.SMTP(host, port, timeout=15) as server:
+                    if use_tls:
+                        server.starttls()
+                    _login_and_send(server)
             logger.info(
                 "email_sent_via_smtp to=%s subject=%s host=%s",
                 ",".join(recipients),

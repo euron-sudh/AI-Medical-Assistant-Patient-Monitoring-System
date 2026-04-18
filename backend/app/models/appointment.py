@@ -24,7 +24,8 @@ class Appointment(db.Model):
             name="ck_appointments_type",
         ),
         CheckConstraint(
-            "status IN ('scheduled', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show')",
+            "status IN ('pending', 'scheduled', 'confirmed', 'in_progress', 'completed', "
+            "'cancelled', 'no_show', 'denied')",
             name="ck_appointments_status",
         ),
     )
@@ -42,7 +43,7 @@ class Appointment(db.Model):
         String(30), nullable=False, default="in_person"
     )
     status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="scheduled", index=True
+        String(20), nullable=False, default="pending", index=True
     )
     scheduled_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True

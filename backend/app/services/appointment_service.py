@@ -24,12 +24,14 @@ logger = structlog.get_logger(__name__)
 
 # Valid status transitions
 VALID_STATUS_TRANSITIONS = {
-    "scheduled": {"confirmed", "cancelled", "no_show"},
+    "pending": {"confirmed", "denied", "cancelled", "no_show"},
+    "scheduled": {"confirmed", "denied", "cancelled", "no_show"},
     "confirmed": {"in_progress", "cancelled", "no_show"},
     "in_progress": {"completed"},
     "completed": set(),
     "cancelled": set(),
     "no_show": set(),
+    "denied": set(),
 }
 
 
@@ -69,10 +71,14 @@ class AppointmentService:
 
         patient_service.ensure_placeholder_profile_for_patient_user(str(patient_id))
 
+        # Patient self-bookings await doctor confirmation; staff-created rows stay on legacy path.
+        initial_status = "pending" if created_by == patient_id else "scheduled"
+
         appointment = Appointment(
             patient_id=patient_id,
             doctor_id=doctor_id,
             appointment_type=data.appointment_type,
+            status=initial_status,
             scheduled_at=data.scheduled_at,
             duration_minutes=data.duration_minutes,
             reason=data.reason,
@@ -94,9 +100,10 @@ class AppointmentService:
         # Best-effort: send confirmation email + in-app notification.
         # Failures must not block appointment creation.
         try:
-            from app.tasks.notification_tasks import send_appointment_booked_email
+            from app.tasks.notification_tasks import deliver_appointment_booking_emails
 
-            send_appointment_booked_email.delay(str(appointment.id))
+            # Run in-process so mail works without a healthy Celery worker (Docker dev).
+            deliver_appointment_booking_emails(str(appointment.id))
         except Exception as exc:
             logger.warning(
                 "appointment_email_dispatch_failed",
@@ -210,7 +217,7 @@ class AppointmentService:
             .where(
                 Appointment.patient_id == patient_id,
                 Appointment.scheduled_at > now,
-                Appointment.status.in_(["scheduled", "confirmed"]),
+                Appointment.status.in_(["pending", "scheduled", "confirmed"]),
             )
             .order_by(Appointment.scheduled_at.asc())
             .limit(limit)
@@ -288,10 +295,11 @@ class AppointmentService:
                 )
             appointment.status = data.status
 
-        if previous_status == "scheduled" and appointment.status == "confirmed":
+        if previous_status in ("pending", "scheduled") and appointment.status == "confirmed":
             patient_service.assign_primary_doctor(
                 str(appointment.patient_id), str(appointment.doctor_id)
             )
+            self._queue_appointment_confirmed_email(appointment.id)
 
         if data.scheduled_at is not None:
             appointment.scheduled_at = data.scheduled_at
@@ -354,7 +362,7 @@ class AppointmentService:
         if not appointment:
             raise ValueError("Appointment not found")
 
-        if appointment.status in ("completed", "cancelled"):
+        if appointment.status in ("completed", "cancelled", "denied"):
             raise ValueError(f"Cannot cancel appointment with status '{appointment.status}'")
 
         appointment.status = "cancelled"
@@ -392,7 +400,7 @@ class AppointmentService:
                 Appointment.doctor_id == doctor_id,
                 Appointment.scheduled_at >= day_start,
                 Appointment.scheduled_at < day_end,
-                Appointment.status.not_in(["cancelled"]),
+                Appointment.status.not_in(["cancelled", "denied"]),
             )
             .order_by(Appointment.scheduled_at.asc())
         )
@@ -425,7 +433,7 @@ class AppointmentService:
         conflict = self._check_scheduling_conflict(doctor_id=doctor_id, scheduled_at=scheduled_at, duration_minutes=duration_minutes)
         if conflict:
             appointment_end = scheduled_at + timedelta(minutes=duration_minutes)
-            stmt = select(Appointment).where(Appointment.doctor_id == doctor_id, Appointment.status.not_in(["cancelled", "no_show"]), Appointment.scheduled_at < appointment_end)
+            stmt = select(Appointment).where(Appointment.doctor_id == doctor_id, Appointment.status.not_in(["cancelled", "denied", "no_show"]), Appointment.scheduled_at < appointment_end)
             appointments = db.session.execute(stmt).scalars().all()
             conflicts = []
             for appt in appointments:
@@ -436,12 +444,12 @@ class AppointmentService:
         return {"available": True, "conflicts": []}
 
     def confirm_appointment(self, appointment_id, confirmed_by, send_notification=True):
-        """Confirm a scheduled appointment and optionally send notification."""
+        """Confirm a pending or scheduled appointment and optionally send notification."""
         stmt = select(Appointment).where(Appointment.id == appointment_id)
         appointment = db.session.execute(stmt).scalar_one_or_none()
         if not appointment:
             raise ValueError("Appointment not found")
-        if appointment.status != "scheduled":
+        if appointment.status not in ("pending", "scheduled"):
             raise ValueError(f"Cannot confirm appointment with status '{appointment.status}'")
         appointment.status = "confirmed"
         patient_service.assign_primary_doctor(
@@ -449,8 +457,35 @@ class AppointmentService:
         )
         db.session.commit()
         logger.info("appointment_confirmed", appointment_id=str(appointment_id), confirmed_by=str(confirmed_by))
+        self._queue_appointment_confirmed_email(appointment.id)
         if send_notification:
             self._send_appointment_notification(appointment, title="Appointment Confirmed", message=f"Your appointment on {appointment.scheduled_at.strftime('%Y-%m-%d %H:%M')} has been confirmed.", notification_type="appointment_confirmed")
+        return self._to_response(appointment)
+
+    def deny_appointment(
+        self,
+        appointment_id: uuid.UUID,
+        denied_by: uuid.UUID,
+        *,
+        reason: str | None = None,
+    ) -> AppointmentResponse:
+        """Mark a pending or scheduled booking as denied by the doctor (no patient email)."""
+        stmt = select(Appointment).where(Appointment.id == appointment_id)
+        appointment = db.session.execute(stmt).scalar_one_or_none()
+        if not appointment:
+            raise ValueError("Appointment not found")
+        if appointment.status not in ("pending", "scheduled"):
+            raise ValueError(f"Cannot deny appointment with status '{appointment.status}'")
+        appointment.status = "denied"
+        if reason:
+            suffix = f"\n--- Denied by doctor: {reason}"
+            appointment.notes = (appointment.notes or "") + suffix
+        db.session.commit()
+        logger.info(
+            "appointment_denied",
+            appointment_id=str(appointment_id),
+            denied_by=str(denied_by),
+        )
         return self._to_response(appointment)
 
     def cancel_appointment_with_notification(self, appointment_id, cancelled_by, data):
@@ -478,14 +513,49 @@ class AppointmentService:
 
         patient_service.ensure_placeholder_profile_for_patient_user(str(patient_id))
 
+        initial_status = "pending" if created_by == patient_id else "scheduled"
         created = []
         for scheduled_at in scheduled_times:
-            appointment = Appointment(patient_id=patient_id, doctor_id=doctor_id, appointment_type=data.appointment_type, scheduled_at=scheduled_at, duration_minutes=data.duration_minutes, reason=data.reason, notes=data.notes, created_by=created_by)
+            appointment = Appointment(
+                patient_id=patient_id,
+                doctor_id=doctor_id,
+                appointment_type=data.appointment_type,
+                status=initial_status,
+                scheduled_at=scheduled_at,
+                duration_minutes=data.duration_minutes,
+                reason=data.reason,
+                notes=data.notes,
+                created_by=created_by,
+            )
             db.session.add(appointment)
             created.append(appointment)
         db.session.commit()
         logger.info("recurring_appointments_created", count=len(created), patient_id=str(patient_id), doctor_id=str(doctor_id), pattern=data.recurrence_pattern)
+        for appt in created:
+            try:
+                from app.tasks.notification_tasks import deliver_appointment_booking_emails
+
+                deliver_appointment_booking_emails(str(appt.id))
+            except Exception as exc:
+                logger.warning(
+                    "recurring_appointment_email_dispatch_failed",
+                    appointment_id=str(appt.id),
+                    error=str(exc),
+                )
         return [self._to_response(a) for a in created]
+
+    def _queue_appointment_confirmed_email(self, appointment_id: uuid.UUID) -> None:
+        """Best-effort patient confirmation email (SMTP/SendGrid); must not raise."""
+        try:
+            from app.tasks.notification_tasks import deliver_appointment_confirmed_patient_email
+
+            deliver_appointment_confirmed_patient_email(str(appointment_id))
+        except Exception as exc:
+            logger.warning(
+                "appointment_confirmation_email_dispatch_failed",
+                appointment_id=str(appointment_id),
+                error=str(exc),
+            )
 
     def _send_appointment_notification(self, appointment, title, message, notification_type):
         """Send a notification related to an appointment."""
@@ -533,7 +603,7 @@ class AppointmentService:
 
         stmt = select(Appointment).where(
             Appointment.doctor_id == doctor_id,
-            Appointment.status.not_in(["cancelled", "no_show"]),
+            Appointment.status.not_in(["cancelled", "denied", "no_show"]),
             Appointment.scheduled_at < appointment_end,
         )
 

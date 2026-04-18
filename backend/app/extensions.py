@@ -37,6 +37,9 @@ def make_celery(app: Flask) -> Celery:
         backend=app.config["CELERY_RESULT_BACKEND"],
     )
     celery.conf.update(app.config)
+    if app.config.get("CELERY_TASK_ALWAYS_EAGER"):
+        celery.conf.task_always_eager = True
+        celery.conf.task_eager_propagates = bool(app.config.get("CELERY_TASK_EAGER_PROPAGATES", True))
 
     class ContextTask(celery.Task):
         """Celery task that runs inside the Flask application context."""

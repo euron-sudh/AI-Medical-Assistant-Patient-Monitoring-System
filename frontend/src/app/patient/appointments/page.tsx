@@ -34,12 +34,14 @@ const typeBadge: Record<string, string> = {
 };
 
 const statusBadge: Record<string, string> = {
+  pending: "bg-amber-100 text-amber-800",
   scheduled: "bg-blue-100 text-blue-700",
   confirmed: "bg-green-100 text-green-700",
   in_progress: "bg-amber-100 text-amber-700",
   completed: "bg-gray-100 text-gray-700",
   cancelled: "bg-red-100 text-red-700",
   no_show: "bg-red-100 text-red-700",
+  denied: "bg-slate-100 text-slate-600",
 };
 
 export default function AppointmentsPage() {
@@ -76,12 +78,12 @@ export default function AppointmentsPage() {
   const upcoming = appointments.filter(
     (a) =>
       new Date(a.scheduled_at) >= now &&
-      !["completed", "cancelled", "no_show"].includes(a.status)
+      !["completed", "cancelled", "no_show", "denied"].includes(a.status)
   );
   const past = appointments.filter(
     (a) =>
       new Date(a.scheduled_at) < now ||
-      ["completed", "cancelled", "no_show"].includes(a.status)
+      ["completed", "cancelled", "no_show", "denied"].includes(a.status)
   );
 
   const getDoctorName = (a: Appointment): string => {

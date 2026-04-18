@@ -979,6 +979,15 @@ def _seed_all_demo_data() -> None:
 with app.app_context():
     db.create_all()
 
+    # Old Docker volumes may still have ck_appointments_status without pending/denied;
+    # create_all does not alter existing CHECK constraints (patient booking would 500).
+    try:
+        from app.db_schema_compat import repair_appointments_status_check_constraint
+
+        repair_appointments_status_check_constraint(db)
+    except Exception as e:
+        print(f"Schema compat (non-fatal): {e}")
+
     # Auto-seed demo data if DB is empty (use advisory lock to prevent race between workers)
     from app.models.user import User
     try:

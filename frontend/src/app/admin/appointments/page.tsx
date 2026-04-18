@@ -32,21 +32,25 @@ const APPOINTMENT_TYPES = [
 ] as const;
 
 const STATUSES = [
+  "pending",
   "scheduled",
   "confirmed",
   "in_progress",
   "completed",
   "cancelled",
   "no_show",
+  "denied",
 ] as const;
 
 const STATUS_STYLES: Record<string, string> = {
+  pending: "bg-amber-50 text-amber-800",
   scheduled: "bg-blue-50 text-blue-700",
   confirmed: "bg-green-50 text-green-700",
   in_progress: "bg-amber-50 text-amber-700",
   completed: "bg-gray-100 text-gray-700",
   cancelled: "bg-red-50 text-red-700",
   no_show: "bg-orange-50 text-orange-700",
+  denied: "bg-slate-100 text-slate-600",
 };
 
 function extractAppointmentList(data: unknown): AppointmentRow[] {

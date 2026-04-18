@@ -238,7 +238,7 @@ export default function PatientDashboard() {
     const upcoming = appointments.filter(
       (a) =>
         new Date(a.scheduled_at) >= now &&
-        !["completed", "cancelled", "no_show"].includes(a.status)
+        !["completed", "cancelled", "no_show", "denied"].includes(a.status)
     );
     upcoming.sort(
       (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
