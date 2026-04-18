@@ -2,10 +2,34 @@
 
 import { useState, useEffect } from "react";
 import apiClient from "@/lib/api-client";
+import { extractPatientList } from "@/lib/patient-list";
 import { Pill, Plus, AlertTriangle, Search, X, CheckCircle, Clock, Users } from "lucide-react";
 
-interface Medication { id: string; patient_id: string; patient_name: string; drug_name: string; generic_name: string | null; dosage: string; frequency: string; route: string | null; start_date: string; end_date: string | null; status: string; reason: string | null; prescribed_by_name: string | null; }
-interface Patient { id: string; user_id: string; first_name: string; last_name: string; }
+interface Medication { id: string; patient_id: string; patient_name: string; drug_name: string; name?: string; generic_name: string | null; dosage: string; frequency: string; route: string | null; start_date: string; end_date: string | null; status: string; reason: string | null; prescribed_by_name: string | null; }
+interface Patient { id: string; user_id: string; first_name?: string | null; last_name?: string | null; name?: string | null; email?: string | null; }
+
+function normalizePatientFromApi(raw: Record<string, unknown>): Patient {
+  const userId = String(raw.user_id ?? raw.userId ?? "").trim();
+  const profileId = String(raw.id ?? "").trim();
+  return {
+    id: profileId || userId,
+    user_id: userId || profileId,
+    first_name: (raw.first_name ?? raw.firstName ?? null) as string | null,
+    last_name: (raw.last_name ?? raw.lastName ?? null) as string | null,
+    name: (raw.name ?? null) as string | null,
+    email: (raw.email ?? null) as string | null,
+  };
+}
+
+function patientDropdownLabel(p: Patient): string {
+  const fn = p.first_name?.trim();
+  const ln = p.last_name?.trim();
+  if (fn || ln) return [fn, ln].filter(Boolean).join(" ");
+  if (p.name?.trim()) return p.name.trim();
+  if (p.email?.trim()) return p.email.trim();
+  if (p.user_id) return `Patient (${p.user_id.slice(0, 8)}…)`;
+  return "Patient";
+}
 interface InteractionWarning { drug1: string; drug2: string; severity: string; description: string; }
 interface PrescriptionFormData { patient_id: string; drug_name: string; generic_name: string; dosage: string; frequency: string; route: string; reason: string; start_date: string; end_date: string; }
 
@@ -38,7 +62,9 @@ export default function PrescriptionsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [interactions, setInteractions] = useState<InteractionWarning[]>([]);
 
-  useEffect(() => { fetchMedications(); fetchPatients(); }, []);
+  useEffect(() => {
+    fetchMedications();
+  }, []);
 
   useEffect(() => {
     if (form.drug_name && form.patient_id) {
@@ -55,26 +81,41 @@ export default function PrescriptionsPage() {
     } else { setInteractions([]); }
   }, [form.drug_name, form.patient_id, medications]);
 
-  const fetchPatients = async () => { try { const r = await apiClient.get("/patients"); setPatients(Array.isArray(r.data.patients ?? r.data) ? (r.data.patients ?? r.data) : []); } catch {} };
-
   const fetchMedications = async () => {
     try {
       setLoading(true);
       const pR = await apiClient.get("/patients");
-      const pl = pR.data.patients ?? pR.data ?? [];
+      const rawList = extractPatientList(pR.data);
+      const normalized = rawList.map((row) => normalizePatientFromApi(row));
+      setPatients(normalized);
+
       const all: Medication[] = [];
-      for (const p of (Array.isArray(pl) ? pl.slice(0, 20) : [])) {
+      for (const p of normalized.slice(0, 20)) {
+        const pid = p.user_id || p.id;
+        if (!pid) continue;
         try {
-          const mR = await apiClient.get(`/medications/${p.user_id ?? p.id}`);
+          const mR = await apiClient.get(`/medications/${pid}`);
           const ms = mR.data.medications ?? mR.data ?? [];
-          if (Array.isArray(ms)) all.push(...ms.map((m: Medication) => ({ ...m, patient_name: m.patient_name ?? `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim(), patient_id: m.patient_id ?? p.user_id ?? p.id })));
-        } catch { /* patient may have no medications */ }
+          if (Array.isArray(ms))
+            all.push(
+              ...ms.map((m: Medication) => ({
+                ...m,
+                drug_name: m.drug_name ?? m.name ?? "",
+                patient_name: m.patient_name ?? patientDropdownLabel(p),
+                patient_id: m.patient_id ?? pid,
+              }))
+            );
+        } catch {
+          /* patient may have no medications */
+        }
       }
       setMedications(all);
       setError(null);
     } catch {
       setError("Failed to load prescriptions.");
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -106,7 +147,7 @@ export default function PrescriptionsPage() {
           <h2 className="text-lg font-semibold text-foreground">New Prescription</h2>
           <form onSubmit={handleSubmit} className="mt-4 space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
-              <div><label className="mb-1 block text-sm font-medium text-foreground">Patient *</label><select value={form.patient_id} onChange={(e) => setForm({...form, patient_id: e.target.value})} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" required><option value="">Select patient...</option>{patients.map((p) => (<option key={p.user_id??p.id} value={p.user_id??p.id}>{p.first_name} {p.last_name}</option>))}</select></div>
+              <div><label className="mb-1 block text-sm font-medium text-foreground">Patient *</label><select value={form.patient_id} onChange={(e) => setForm({...form, patient_id: e.target.value})} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" required><option value="">Select patient...</option>{patients.map((p) => { const v = p.user_id || p.id; return (<option key={v} value={v}>{patientDropdownLabel(p)}</option>); })}</select></div>
               <div><label className="mb-1 block text-sm font-medium text-foreground">Drug Name *</label><input type="text" value={form.drug_name} onChange={(e) => setForm({...form, drug_name: e.target.value})} placeholder="e.g., Metformin" className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" required /></div>
               <div><label className="mb-1 block text-sm font-medium text-foreground">Generic Name</label><input type="text" value={form.generic_name} onChange={(e) => setForm({...form, generic_name: e.target.value})} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" /></div>
               <div><label className="mb-1 block text-sm font-medium text-foreground">Dosage *</label><input type="text" value={form.dosage} onChange={(e) => setForm({...form, dosage: e.target.value})} placeholder="e.g., 500mg" className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" required /></div>

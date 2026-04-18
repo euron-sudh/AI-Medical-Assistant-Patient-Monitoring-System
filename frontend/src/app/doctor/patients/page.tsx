@@ -2,21 +2,13 @@
 
 import { useState, useEffect } from "react";
 import apiClient from "@/lib/api-client";
+import {
+  extractPatientList,
+  normalizeDoctorPatientRow,
+  type DoctorPatientListRow,
+} from "@/lib/patient-list";
 
-interface Patient {
-  id: string;
-  user_id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  gender: string;
-  blood_type: string;
-  date_of_birth: string;
-  height_cm: number | null;
-  weight_kg: number | null;
-  assigned_doctor_name: string | null;
-  phone: string | null;
-}
+type Patient = DoctorPatientListRow;
 
 export default function PatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -33,8 +25,8 @@ export default function PatientsPage() {
     try {
       setLoading(true);
       const res = await apiClient.get("/patients");
-      const data = res.data.patients ?? res.data ?? [];
-      setPatients(Array.isArray(data) ? data : []);
+      const rows = extractPatientList(res.data).map((raw) => normalizeDoctorPatientRow(raw));
+      setPatients(rows);
     } catch (err: unknown) {
       const msg =
         err && typeof err === "object" && "response" in err
@@ -55,8 +47,12 @@ export default function PatientsPage() {
 
   const getAge = (dob: string): string => {
     if (!dob) return "N/A";
-    const diff = Date.now() - new Date(dob).getTime();
-    return `${Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000))}y`;
+    const t = new Date(dob).getTime();
+    if (Number.isNaN(t)) return "N/A";
+    const diff = Date.now() - t;
+    const years = Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000));
+    if (Number.isNaN(years) || years < 0) return "N/A";
+    return `${years}y`;
   };
 
   return (
@@ -132,9 +128,9 @@ export default function PatientsPage() {
                   <span className="font-medium text-foreground">
                     {p.first_name} {p.last_name}
                   </span>
-                  <span className="text-muted-foreground">{p.email ?? "N/A"}</span>
+                  <span className="text-muted-foreground">{p.email ? p.email : "N/A"}</span>
                   <span className="text-muted-foreground">
-                    {getAge(p.date_of_birth)} / {p.gender ?? "N/A"}
+                    {getAge(p.date_of_birth)} / {p.gender ? p.gender : "N/A"}
                   </span>
                   <span>
                     {p.blood_type ? (

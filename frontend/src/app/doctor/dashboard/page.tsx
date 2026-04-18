@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import apiClient from "@/lib/api-client";
+import { extractPatientList } from "@/lib/patient-list";
 import {
   Users,
   CalendarClock,
@@ -44,13 +45,6 @@ interface Alert {
   vital_type?: string;
 }
 
-interface Patient {
-  id: string;
-  user_id: string;
-  first_name: string;
-  last_name: string;
-}
-
 const SEVERITY_STYLES: Record<string, string> = {
   critical: "bg-red-100 text-red-800 border-red-200",
   emergency: "bg-red-100 text-red-800 border-red-200",
@@ -83,8 +77,8 @@ export default function DoctorDashboard() {
 
     try {
       const pRes = await apiClient.get("/patients");
-      const patients: Patient[] = pRes.data.patients ?? pRes.data ?? [];
-      setPatientCount(Array.isArray(patients) ? patients.length : 0);
+      const patients = extractPatientList(pRes.data);
+      setPatientCount(patients.length);
     } catch {
       /* ignore */
     }

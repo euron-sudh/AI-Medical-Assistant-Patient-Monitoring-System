@@ -17,6 +17,7 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from pydantic import ValidationError
 
+from app.middleware.auth_middleware import require_role
 from app.schemas.appointment_schema import (
     AppointmentListParams,
     CancelAppointmentRequest,
@@ -157,11 +158,31 @@ def update_appointment(appointment_id: str):
         return jsonify({"error": {"code": "VALIDATION_ERROR", "details": e.errors()}}), 400
 
     try:
-        appointment = appointment_service.update_appointment(appt_uuid, data)
+        appointment = appointment_service.update_appointment(
+            appt_uuid, data, actor_role=role
+        )
     except ValueError as e:
         return jsonify({"error": {"code": "BAD_REQUEST", "message": str(e)}}), 400
 
     return jsonify(appointment.model_dump(mode="json")), 200
+
+
+@bp.route("/<appointment_id>", methods=["DELETE"])
+@jwt_required()
+@require_role(["admin"])
+def delete_appointment(appointment_id: str):
+    """Permanently delete an appointment (admin only)."""
+    try:
+        appt_uuid = uuid.UUID(appointment_id)
+    except ValueError:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Invalid appointment ID"}}), 400
+
+    try:
+        appointment_service.delete_appointment(appt_uuid)
+    except ValueError as e:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": str(e)}}), 404
+
+    return jsonify({"message": "Appointment deleted"}), 200
 
 
 @bp.route("/<appointment_id>/cancel", methods=["PUT"])
