@@ -41,6 +41,12 @@ class UpdateAppointmentRequest(BaseModel):
         default=None,
         pattern="^(in_person|telemedicine|follow_up|emergency)$",
     )
+    patient_id: str | None = None
+    doctor_id: str | None = None
+    appointment_type: str | None = Field(
+        default=None,
+        pattern="^(in_person|telemedicine|follow_up|emergency)$",
+    )
 
 
 class CancelAppointmentRequest(BaseModel):
