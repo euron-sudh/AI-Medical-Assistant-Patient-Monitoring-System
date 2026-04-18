@@ -11,6 +11,7 @@ interface AdminLayoutProps {
 const navItems = [
   { href: "/admin/dashboard", label: "Dashboard", icon: "D" },
   { href: "/admin/users", label: "User Management", icon: "U" },
+  { href: "/admin/appointments", label: "Appointment Management", icon: "AM" },
   { href: "/admin/system-health", label: "System Health", icon: "H" },
   { href: "/admin/ai-config", label: "AI Configuration", icon: "AI" },
   { href: "/admin/audit-logs", label: "Audit Logs", icon: "AL" },

@@ -50,6 +50,8 @@ class PatientProfileResponse(BaseModel):
     emergency_contact: dict | None = None
     insurance_info: dict | None = None
     assigned_doctor_id: str | None = None
+    assigned_doctor_name: str | None = None
+    phone: str | None = None
 
     class Config:
         from_attributes = True

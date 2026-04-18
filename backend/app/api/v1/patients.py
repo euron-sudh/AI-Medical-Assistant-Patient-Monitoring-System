@@ -66,7 +66,7 @@ def list_patients():
 
     doctor_id = requester_id if role in ("doctor", "nurse") else None
     profiles = patient_service.list_patients(doctor_id=doctor_id, limit=limit, offset=offset)
-    return jsonify([p.model_dump() for p in profiles]), 200
+    return jsonify([p.model_dump(mode="json") for p in profiles]), 200
 
 
 @bp.route("/<user_id>", methods=["GET"])
@@ -83,7 +83,7 @@ def get_patient(user_id: str):
     except ValueError as e:
         return jsonify({"error": {"code": "NOT_FOUND", "message": str(e)}}), 404
 
-    return jsonify(profile.model_dump()), 200
+    return jsonify(profile.model_dump(mode="json")), 200
 
 
 @bp.route("", methods=["POST"])
@@ -108,7 +108,7 @@ def create_patient():
     except ValueError as e:
         return jsonify({"error": {"code": "CONFLICT", "message": str(e)}}), 409
 
-    return jsonify(profile.model_dump()), 201
+    return jsonify(profile.model_dump(mode="json")), 201
 
 
 @bp.route("/<user_id>", methods=["PUT"])
@@ -130,7 +130,7 @@ def update_patient(user_id: str):
     except ValueError as e:
         return jsonify({"error": {"code": "NOT_FOUND", "message": str(e)}}), 404
 
-    return jsonify(profile.model_dump()), 200
+    return jsonify(profile.model_dump(mode="json")), 200
 
 
 @bp.route("/<user_id>/medical-history", methods=["GET"])

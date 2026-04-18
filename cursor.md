@@ -1736,3 +1736,570 @@ Prompt expectations:
 
 Show the result in a structured visual format.
 
+# Cursor Task: Update Report Tab UI Layout for Side-by-Side Upload Boxes, Result Section Flow, PDF Download, and Reset Action
+
+## Context
+
+This is for the same Med Assist application.
+In the **Lab Report / Report section**, the file upload windows are currently shown one after another vertically.
+I want the upload sections to be improved from a UI/UX perspective.
+
+The required change is:
+- keep the upload sections at the **top**,
+- show them **side by side** instead of stacked one below another,
+- after the user clicks **Analyze**, show the **result section below** the upload area,
+- keep the **Download PDF** option at the end of the result section,
+- and add a button called **Analyze Other Report**.
+- change the first box name from File to **Report Analysis**.
+
+When the user clicks **Analyze Other Report**, the current result section should be cleared/reset so the user can upload and analyze a new report cleanly.
+
+This request is focused on **UI flow and interaction changes**.
+
+---
+
+## Goal
+
+Refactor the Report section UI so that:
+1. The upload boxes appear side by side at the top.
+2. The analysis result appears below after the user runs analysis.
+3. The download PDF action appears at the bottom of the result section.
+4. A new `Analyze Other Report` button is added.
+5. Clicking `Analyze Other Report` clears the current result state and prepares the UI for a fresh upload/analysis flow.
+
+---
+
+## Scope
+
+Apply this as a UI/UX layout improvement in the report area.
+Do not break existing analysis logic.
+Do not remove existing report features.
+Refactor the presentation and interaction flow so the page feels more organized and easier to use.
+
+If the Report tab currently contains multiple upload blocks, keep them as separate features, but arrange them more cleanly in the new layout.
+
+---
+
+## Required UI Layout
+
+### 1. Upload boxes at the top
+At the top of the Report section, place the upload boxes in a horizontal layout.
+They should appear **side by side** on larger screens.
+
+Expected layout behavior:
+- Desktop/tablet: upload cards shown side by side.
+- Smaller screens/mobile: they may stack vertically if needed for responsiveness.
+- The layout should remain neat, balanced, and responsive.
+
+If there are two report upload features in this tab, both should appear in the top row as separate cards/panels.
+
+---
+
+### 2. Result section below the upload area
+Do not show the result mixed inside the upload card itself if that makes the UI cramped.
+After the user clicks **Analyze**, the generated result should appear in a dedicated **result section below** the top upload row.
+
+Expected behavior:
+- top area = upload options
+- bottom area = generated result
+- results should appear only after analysis is completed
+- loading state should appear between upload and result if analysis is in progress
+
+This should make the screen easier to scan and use.
+
+---
+
+### 3. Download PDF at the end of result section
+The **Download PDF** button should be placed at the bottom/end of the generated result section.
+It should feel like the final action after reviewing the analysis.
+
+Requirements:
+- keep it clearly visible
+- place it after the result content
+- do not place it before the analysis output
+- style it like a clear call-to-action
+
+If the app already has PDF download support, reuse that logic but reposition the action in the UI.
+
+---
+
+### 4. Add `Analyze Other Report` button
+Add a button labeled:
+- `Analyze Other Report`
+
+This button should appear near the end of the result flow, ideally close to the Download PDF action.
+
+Recommended placement:
+- bottom of result section
+- near or beside Download PDF
+- visually secondary or neutral compared to primary action styling
+
+---
+
+### 5. Reset result when `Analyze Other Report` is clicked
+When the user clicks `Analyze Other Report`, the app should reset the report-analysis state so a new analysis can begin cleanly.
+
+Expected reset behavior:
+- clear the currently visible result section
+- clear previous generated analysis content
+- clear selected uploaded file if appropriate
+- clear preview if needed
+- reset error state if present
+- reset loading state if present
+- return the user to the initial upload-ready state
+
+The user should feel like they are starting a fresh report analysis.
+
+---
+
+## UX Flow
+
+The target user flow should be:
+
+1. User enters the Report section.
+2. User sees upload boxes side by side at the top.
+3. User uploads/selects a report.
+4. User clicks Analyze.
+5. Loading state appears.
+6. Result section appears below the upload area.
+7. User reads the result.
+8. User can click Download PDF at the bottom.
+9. User can click Analyze Other Report to clear the result and start over.
+
+This should be the clean default interaction pattern.
+
+---
+
+## Layout Expectations
+
+### Top section
+The top row should contain:
+- the upload boxes/cards
+- their headings/descriptions
+- upload controls
+- preview area if relevant
+- analyze button within each card if that matches the current behavior
+
+### Bottom section
+The bottom section should contain:
+- analysis result heading
+- structured result content
+- disclaimers if applicable
+- Download PDF action
+- Analyze Other Report action
+
+The result section should feel visually separated from the upload row, for example with spacing, divider, card container, or subtle background difference.
+
+---
+
+## Responsiveness Requirements
+
+The new layout must remain responsive.
+
+Expected behavior:
+- On desktop: side-by-side upload cards.
+- On tablet: side-by-side if space allows, otherwise wrap cleanly.
+- On mobile: stack vertically with proper spacing.
+- Result section should remain full-width below the upload area.
+
+Do not allow overlap, cramped spacing, or broken button alignment.
+
+---
+
+## State Management Requirements
+
+Cursor should inspect the existing state flow and update it carefully.
+
+Need UI state handling for:
+- initial state
+- file selected state
+- analyzing/loading state
+- result available state
+- error state
+- reset state after `Analyze Other Report`
+
+The reset action should not require a page refresh.
+It should be handled through local/component/app state.
+
+---
+
+## Visual Design Expectations
+
+Keep the UI clean and medically professional.
+
+Recommended design direction:
+- upload cards with clear titles
+- enough spacing between side-by-side cards
+- result section in a larger clean container below
+- action buttons aligned clearly at the end of the result
+- Download PDF as primary/important action
+- Analyze Other Report as secondary reset action
+
+Use consistent spacing, colors, and card styling with the existing design system.
+
+---
+
+## Cursor Implementation Tasks
+
+1. Inspect the current Report/Lab Report section layout.
+2. Identify the existing upload boxes/cards that are currently stacked vertically.
+3. Refactor the layout so the upload boxes appear side by side at the top on larger screens.
+4. Keep the layout responsive so it stacks on smaller screens if needed.
+5. Move or render the analysis result in a separate section below the top upload row.
+6. Ensure the result is shown only after analysis is triggered/completed.
+7. Place the Download PDF action at the bottom of the result section.
+8. Add a new `Analyze Other Report` button near the bottom actions.
+9. Implement reset logic so clicking `Analyze Other Report` clears the visible result and returns the UI to a fresh state.
+10. Clear uploaded file/preview/result/error/loading state as needed during reset.
+11. Keep existing report analysis logic intact.
+12. Ensure the new layout works correctly for long results and multiple actions.
+13. Test the flow on desktop, tablet, and mobile layouts.
+14. Verify that PDF download still works after the layout refactor.
+15. Verify that after reset, a new upload can be analyzed without stale data remaining.
+
+---
+
+## Acceptance Criteria
+
+The work is complete when:
+- The upload windows appear side by side at the top on larger screens.
+- The upload windows remain responsive and stack cleanly on smaller screens.
+- The result section appears below the upload area after Analyze is clicked.
+- The result section is visually separated and easy to read.
+- The Download PDF button appears at the bottom of the result section.
+- An `Analyze Other Report` button is visible in the result action area.
+- Clicking `Analyze Other Report` clears the result section.
+- Clicking `Analyze Other Report` resets the screen to a fresh upload-ready state.
+- Existing analysis functionality still works correctly.
+- Existing PDF export still works correctly after the UI changes.
+
+---
+
+## Notes For Cursor
+
+This task is primarily about improving the Report section layout and flow.
+Do not redesign the entire feature logic unnecessarily.
+Focus on:
+1. side-by-side upload layout,
+2. result section below,
+3. Download PDF at the end,
+4. reset flow through `Analyze Other Report`.
+
+Make the interaction feel clean, modern, and easy for patients to use.
+
+# Cursor Task: Add Appointment Management as an Individual Admin Tab
+
+## Context
+
+This is for the admin portal of the Med Assist application.
+I want to add a new **Appointment Management** tab in the admin portal.
+This should be an **individual tab placed below User Management** in the admin navigation.
+
+Inside this tab, all patient appointment details should be populated and visible to the admin.
+The admin should be able to see:
+- patient name
+- doctor name
+- appointment date
+- appointment time
+
+The admin should also be able to:
+- add a patient appointment
+- edit an existing appointment
+- delete an appointment
+
+This feature should follow the same UI structure and style as the rest of the admin portal.
+
+---
+
+## Goal
+
+Add a dedicated **Appointment Management** tab in the admin portal so that admins can:
+1. Open the tab directly from admin navigation.
+2. View all patient appointments in one place.
+3. See appointment details clearly, including patient name, doctor name, date, and time.
+4. Add new appointments.
+5. Edit existing appointments.
+6. Delete appointments.
+
+---
+
+## Navigation Requirement
+
+Add a new admin tab named:
+- `Appointment Management`
+
+Placement requirement:
+- It should appear as an **individual tab below User Management** in the admin portal navigation.
+- It should not be hidden inside User Management as a nested sub-tab.
+- It should be directly visible and accessible from the admin sidebar/tab list.
+
+The purpose is to make appointment administration easier and more direct for the admin.
+
+---
+
+## Main Requirement
+
+Inside the **Appointment Management** tab, all patient appointment details should populate automatically from the appointment data source.
+The admin should be able to view all appointments in a structured table or list.
+
+At minimum, the tab should display these columns/fields:
+- Patient Name
+- Doctor Name
+- Appointment Date
+- Appointment Time
+- Appointment Status (if available)
+- Appointment Type (if available)
+- Notes / Reason (optional)
+- Actions
+
+Actions should include:
+- Edit
+- Delete
+
+There should also be an **Add Appointment** action/button for creating new appointments.
+
+---
+
+## Appointment List View
+
+The main content of the tab should be a table or structured list that shows all appointment records.
+The list should be admin-friendly, readable, and easy to scan.
+
+Recommended behavior:
+- show all patient appointments
+- show which doctor the appointment is with
+- show date clearly
+- show time clearly
+- keep rows aligned and readable
+- support scrolling/pagination if the list is long
+
+If the admin portal already has reusable table components, use the same pattern here.
+
+---
+
+## Add Appointment Feature
+
+Provide an `Add Appointment` button in the Appointment Management tab.
+This action should open a form using the app’s current admin UI pattern, such as a modal, drawer, or form panel.
+
+Recommended form fields:
+- Patient Name or Patient Selector
+- Doctor Name or Doctor Selector
+- Appointment Date
+- Appointment Time
+- Appointment Status
+- Appointment Type
+- Notes / Reason
+
+The form should validate required fields before submission.
+After successful creation, the new appointment should appear in the appointment list without requiring a page refresh.
+
+---
+
+## Edit Appointment Feature
+
+Allow the admin to edit an existing patient appointment.
+Each row in the appointment table should include an `Edit` action.
+
+Expected edit behavior:
+- open the appointment in an editable form
+- preload the existing values
+- allow updating patient, doctor, date, time, status, type, or notes
+- save changes successfully
+- refresh the table/list after edit
+
+The edit form should reuse the add form structure where possible.
+
+---
+
+## Delete Appointment Feature
+
+Allow the admin to delete an appointment.
+Each row should include a `Delete` action.
+
+Expected delete behavior:
+- clicking delete opens a confirmation dialog
+- admin confirms before deletion happens
+- after deletion, the appointment disappears from the list
+- success or error feedback is shown
+
+Do not delete instantly without confirmation.
+
+---
+
+## UI Requirements
+
+### Appointment Management page layout
+The tab should include:
+- page heading: `Appointment Management`
+- `Add Appointment` button near the top
+- appointment table/list below
+- row-level Edit/Delete actions
+- optional search/filter support if already used in the admin portal
+
+### Data display requirements
+The appointment rows should clearly show:
+- patient name
+- doctor name
+- appointment date
+- appointment time
+
+These four fields are mandatory for visible display.
+Additional fields can be shown if already available in the system.
+
+### Empty state
+If no appointments exist, show an empty state such as:
+- `No appointments available`
+- and provide a clear button or prompt to add an appointment.
+
+### Loading state
+If appointments are being fetched, show a loading state consistent with the current admin portal.
+
+### Error state
+If fetching, creating, editing, or deleting fails, show a clear error message and allow retry where appropriate.
+
+---
+
+## Data and Behavior Requirements
+
+The Appointment Management tab should support full CRUD behavior:
+- Create appointment
+- Read/view appointments
+- Update appointment
+- Delete appointment
+
+Behavior expectations:
+- all appointment records should populate in the tab
+- the admin should see patient and doctor mapping correctly
+- date and time should render clearly and consistently
+- the table should refresh after add/edit/delete
+- no manual page reload should be required
+
+If the project already uses a service layer, hooks, query library, or admin state management pattern, integrate with that instead of adding a disconnected implementation.
+
+---
+
+## Suggested Columns
+
+Recommended appointment table columns:
+1. Appointment ID (optional if available)
+2. Patient Name
+3. Doctor Name
+4. Appointment Date
+5. Appointment Time
+6. Status
+7. Appointment Type
+8. Notes / Reason
+9. Actions
+
+If some fields do not exist yet in the backend, at minimum ensure:
+- Patient Name
+- Doctor Name
+- Appointment Date
+- Appointment Time
+- Actions
+
+---
+
+## Suggested Interaction Flow
+
+### View appointments
+1. Admin opens the admin portal.
+2. Admin clicks `Appointment Management`.
+3. The system loads all patient appointments.
+4. The table shows patient name, doctor name, date, and time.
+
+### Add appointment
+1. Admin clicks `Add Appointment`.
+2. Form opens.
+3. Admin enters appointment details.
+4. Admin saves.
+5. New appointment appears in the table.
+
+### Edit appointment
+1. Admin clicks `Edit` on a row.
+2. Form opens with existing values.
+3. Admin updates the appointment.
+4. Admin saves changes.
+5. Updated appointment appears in the table.
+
+### Delete appointment
+1. Admin clicks `Delete`.
+2. Confirmation dialog appears.
+3. Admin confirms.
+4. Appointment is removed from the table.
+
+---
+
+## Technical Requirements
+
+### Admin navigation integration
+Cursor should inspect the current admin navigation structure and add the new tab below User Management as an individual navigation item.
+
+### Table integration
+Use the current admin table/list styling and behavior if available.
+The appointment list should remain visually consistent with other admin data views.
+
+### Form integration
+Reuse existing admin form patterns for add/edit flows.
+This includes inputs, validation, submit handling, and dialogs/modals/drawers.
+
+### API/backend integration
+If appointment APIs already exist, connect the UI to them.
+If not, create the required CRUD integration for:
+- fetch all appointments
+- create appointment
+- update appointment
+- delete appointment
+
+### Data refresh
+Ensure the tab updates immediately after add/edit/delete operations.
+Avoid requiring a manual refresh.
+
+---
+
+## Cursor Implementation Tasks
+
+1. Inspect the current admin portal navigation structure.
+2. Add a new individual tab named `Appointment Management` below `User Management`.
+3. Create the Appointment Management screen/view.
+4. Fetch and populate all patient appointment records in this tab.
+5. Display patient name, doctor name, appointment date, and appointment time clearly in the table.
+6. Add an `Add Appointment` button.
+7. Build an add-appointment form.
+8. Add an `Edit` action for each appointment row.
+9. Build an edit-appointment form reusing the add form where possible.
+10. Add a `Delete` action with confirmation dialog.
+11. Integrate create, read, update, and delete functionality with the existing backend/service layer.
+12. Add loading, empty, success, and error states.
+13. Ensure the table refreshes after every create/update/delete action.
+14. Keep the new tab visually consistent with the rest of the admin portal.
+15. Test the full CRUD flow with patient and doctor appointment data.
+
+---
+
+## Acceptance Criteria
+
+The work is complete when:
+- A new `Appointment Management` tab appears below `User Management` as an individual admin tab.
+- The tab opens correctly from the admin portal navigation.
+- All patient appointments populate in the tab.
+- The appointment list clearly shows patient name, doctor name, appointment date, and appointment time.
+- Admin can add a new appointment.
+- Admin can edit an existing appointment.
+- Admin can delete an appointment after confirmation.
+- The list refreshes correctly after add/edit/delete.
+- Loading, empty, and error states are handled properly.
+- The feature matches the current admin portal UI style.
+
+---
+
+## Notes For Cursor
+
+This should be implemented as a dedicated admin management feature, not a hidden sub-flow.
+The most important requirements are:
+1. new individual tab below User Management,
+2. all patient appointments populated,
+3. patient name + doctor name + date + time visible,
+4. admin can add, edit, and delete appointments,
+5. clean integration with current admin design and architecture.

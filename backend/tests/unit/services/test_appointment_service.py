@@ -1,11 +1,13 @@
 """Unit tests for appointment and telemedicine services."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import select
 
 from app.models.appointment import Appointment
+from app.models.patient import PatientProfile
 from app.models.user import User
 from app.schemas.appointment_schema import (
     CancelAppointmentRequest,
@@ -98,6 +100,20 @@ def create_request(patient, doctor, future_time):
 
 
 @pytest.fixture
+def patient_with_profile(db, patient):
+    """Patient user with a profile row (required for assign_primary_doctor on confirm)."""
+    profile = PatientProfile(
+        user_id=patient.id,
+        date_of_birth=date(1990, 1, 15),
+        gender="other",
+        blood_type="O+",
+    )
+    db.session.add(profile)
+    db.session.commit()
+    return profile
+
+
+@pytest.fixture
 def sample_appointment(db, patient, doctor, future_time):
     """Create a sample appointment in the database."""
     appt = Appointment(
@@ -149,6 +165,30 @@ class TestCreateAppointment:
         assert result.appointment_type == "in_person"
         assert result.reason == "Annual checkup"
         assert result.duration_minutes == 30
+
+    def test_create_appointment_adds_placeholder_profile(
+        self, appt_service, db, patient, doctor, future_time
+    ):
+        """Patients without a profile get a minimal row when booking so confirm can assign."""
+        assert (
+            db.session.execute(
+                select(PatientProfile).where(PatientProfile.user_id == patient.id)
+            ).scalar_one_or_none()
+            is None
+        )
+        req = CreateAppointmentRequest(
+            patient_id=str(patient.id),
+            doctor_id=str(doctor.id),
+            appointment_type="in_person",
+            scheduled_at=future_time,
+            duration_minutes=30,
+            reason="Checkup",
+        )
+        appt_service.create_appointment(req, created_by=patient.id)
+        profile = db.session.execute(
+            select(PatientProfile).where(PatientProfile.user_id == patient.id)
+        ).scalar_one_or_none()
+        assert profile is not None
 
     def test_create_appointment_scheduling_conflict(
         self, appt_service, create_request, patient, sample_appointment
@@ -236,6 +276,17 @@ class TestUpdateAppointment:
         result = appt_service.update_appointment(sample_appointment.id, data)
         assert result.status == "confirmed"
 
+    def test_confirm_via_update_sets_assigned_doctor(
+        self, appt_service, db, patient, doctor, patient_with_profile, sample_appointment
+    ):
+        """scheduled → confirmed assigns the appointment doctor on the patient profile."""
+        data = UpdateAppointmentRequest(status="confirmed")
+        appt_service.update_appointment(sample_appointment.id, data)
+        profile = db.session.execute(
+            select(PatientProfile).where(PatientProfile.user_id == patient.id)
+        ).scalar_one()
+        assert profile.assigned_doctor_id == doctor.id
+
     def test_invalid_status_transition(self, appt_service, sample_appointment):
         """scheduled → completed is invalid."""
         data = UpdateAppointmentRequest(status="completed")
@@ -247,6 +298,18 @@ class TestUpdateAppointment:
         data = UpdateAppointmentRequest(notes="test")
         with pytest.raises(ValueError, match="not found"):
             appt_service.update_appointment(uuid.uuid4(), data)
+
+
+class TestConfirmAppointment:
+    def test_confirm_sets_assigned_doctor(
+        self, appt_service, db, patient, doctor, patient_with_profile, sample_appointment
+    ):
+        """PUT confirm path: patient profile is linked to the appointment doctor."""
+        appt_service.confirm_appointment(sample_appointment.id, doctor.id, send_notification=False)
+        profile = db.session.execute(
+            select(PatientProfile).where(PatientProfile.user_id == patient.id)
+        ).scalar_one()
+        assert profile.assigned_doctor_id == doctor.id
 
 
 class TestCancelAppointment:

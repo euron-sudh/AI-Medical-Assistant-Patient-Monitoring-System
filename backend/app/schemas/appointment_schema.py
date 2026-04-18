@@ -21,7 +21,11 @@ class CreateAppointmentRequest(BaseModel):
 
 
 class UpdateAppointmentRequest(BaseModel):
-    """Schema for updating an existing appointment."""
+    """Schema for updating an existing appointment.
+
+    ``patient_id``, ``doctor_id``, and ``appointment_type`` are applied only when
+    the caller is an admin (see appointment service / API).
+    """
 
     scheduled_at: datetime | None = None
     duration_minutes: int | None = Field(default=None, ge=5, le=480)
@@ -30,6 +34,12 @@ class UpdateAppointmentRequest(BaseModel):
     status: str | None = Field(
         default=None,
         pattern="^(scheduled|confirmed|in_progress|completed|cancelled|no_show)$",
+    )
+    patient_id: str | None = None
+    doctor_id: str | None = None
+    appointment_type: str | None = Field(
+        default=None,
+        pattern="^(in_person|telemedicine|follow_up|emergency)$",
     )
 
 

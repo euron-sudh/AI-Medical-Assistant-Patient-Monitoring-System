@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.extensions import db
 from app.models.appointment import Appointment
 from app.models.doctor import DoctorProfile
+from app.models.telemedicine import TelemedicineSession
 from app.schemas.appointment_schema import (
     AppointmentResponse,
     CancelAppointmentRequest,
@@ -17,6 +18,7 @@ from app.schemas.appointment_schema import (
     UpdateAppointmentRequest,
 )
 from app.schemas.notification_schema import CreateNotificationRequest
+from app.services.patient_service import patient_service
 
 logger = structlog.get_logger(__name__)
 
@@ -64,6 +66,8 @@ class AppointmentService:
         )
         if conflict:
             raise ValueError("Doctor has a scheduling conflict at the requested time")
+
+        patient_service.ensure_placeholder_profile_for_patient_user(str(patient_id))
 
         appointment = Appointment(
             patient_id=patient_id,
@@ -179,7 +183,12 @@ class AppointmentService:
         if end_date:
             stmt = stmt.where(Appointment.scheduled_at <= end_date)
 
-        stmt = stmt.order_by(Appointment.scheduled_at.asc()).offset(offset).limit(limit)
+        order = (
+            Appointment.scheduled_at.desc()
+            if role == "admin"
+            else Appointment.scheduled_at.asc()
+        )
+        stmt = stmt.order_by(order).offset(offset).limit(limit)
         appointments = db.session.execute(stmt).scalars().all()
         return [self._to_response(a) for a in appointments]
 
@@ -210,13 +219,19 @@ class AppointmentService:
         return [self._to_response(a) for a in appointments]
 
     def update_appointment(
-        self, appointment_id: uuid.UUID, data: UpdateAppointmentRequest
+        self,
+        appointment_id: uuid.UUID,
+        data: UpdateAppointmentRequest,
+        *,
+        actor_role: str = "patient",
     ) -> AppointmentResponse:
         """Update an existing appointment.
 
         Args:
             appointment_id: UUID of the appointment.
             data: Validated update data (only non-None fields are applied).
+            actor_role: When ``admin``, ``patient_id`` / ``doctor_id`` / ``appointment_type``
+                may be changed on the appointment.
 
         Returns:
             Updated AppointmentResponse.
@@ -230,6 +245,41 @@ class AppointmentService:
         if not appointment:
             raise ValueError("Appointment not found")
 
+        proposed_patient_id = appointment.patient_id
+        proposed_doctor_id = appointment.doctor_id
+        if actor_role == "admin":
+            if data.patient_id is not None:
+                proposed_patient_id = uuid.UUID(data.patient_id)
+            if data.doctor_id is not None:
+                proposed_doctor_id = uuid.UUID(data.doctor_id)
+
+        proposed_start = (
+            data.scheduled_at if data.scheduled_at is not None else appointment.scheduled_at
+        )
+        proposed_duration = (
+            data.duration_minutes
+            if data.duration_minutes is not None
+            else appointment.duration_minutes
+        )
+
+        if self._check_scheduling_conflict(
+            proposed_doctor_id,
+            proposed_start,
+            proposed_duration,
+            exclude_id=appointment.id,
+        ):
+            raise ValueError("Doctor has a scheduling conflict at the requested time")
+
+        if actor_role == "admin":
+            if data.patient_id is not None:
+                patient_service.ensure_placeholder_profile_for_patient_user(data.patient_id)
+                appointment.patient_id = proposed_patient_id
+            if data.doctor_id is not None:
+                appointment.doctor_id = proposed_doctor_id
+            if data.appointment_type is not None:
+                appointment.appointment_type = data.appointment_type
+
+        previous_status = appointment.status
         if data.status and data.status != appointment.status:
             valid_transitions = VALID_STATUS_TRANSITIONS.get(appointment.status, set())
             if data.status not in valid_transitions:
@@ -237,6 +287,11 @@ class AppointmentService:
                     f"Cannot transition from '{appointment.status}' to '{data.status}'"
                 )
             appointment.status = data.status
+
+        if previous_status == "scheduled" and appointment.status == "confirmed":
+            patient_service.assign_primary_doctor(
+                str(appointment.patient_id), str(appointment.doctor_id)
+            )
 
         if data.scheduled_at is not None:
             appointment.scheduled_at = data.scheduled_at
@@ -256,6 +311,23 @@ class AppointmentService:
         )
 
         return self._to_response(appointment)
+
+    def delete_appointment(self, appointment_id: uuid.UUID) -> None:
+        """Permanently remove an appointment and any linked telemedicine session rows."""
+        appointment = db.session.get(Appointment, appointment_id)
+        if not appointment:
+            raise ValueError("Appointment not found")
+
+        sessions = db.session.execute(
+            select(TelemedicineSession).where(
+                TelemedicineSession.appointment_id == appointment_id
+            )
+        ).scalars().all()
+        for sess in sessions:
+            db.session.delete(sess)
+        db.session.delete(appointment)
+        db.session.commit()
+        logger.info("appointment_deleted", appointment_id=str(appointment_id))
 
     def cancel_appointment(
         self,
@@ -372,6 +444,9 @@ class AppointmentService:
         if appointment.status != "scheduled":
             raise ValueError(f"Cannot confirm appointment with status '{appointment.status}'")
         appointment.status = "confirmed"
+        patient_service.assign_primary_doctor(
+            str(appointment.patient_id), str(appointment.doctor_id)
+        )
         db.session.commit()
         logger.info("appointment_confirmed", appointment_id=str(appointment_id), confirmed_by=str(confirmed_by))
         if send_notification:
@@ -400,6 +475,9 @@ class AppointmentService:
                 raise ValueError(f"Doctor has a scheduling conflict for occurrence {i + 1} at {current_time.isoformat()}")
             scheduled_times.append(current_time)
             current_time = current_time + delta
+
+        patient_service.ensure_placeholder_profile_for_patient_user(str(patient_id))
+
         created = []
         for scheduled_at in scheduled_times:
             appointment = Appointment(patient_id=patient_id, doctor_id=doctor_id, appointment_type=data.appointment_type, scheduled_at=scheduled_at, duration_minutes=data.duration_minutes, reason=data.reason, notes=data.notes, created_by=created_by)

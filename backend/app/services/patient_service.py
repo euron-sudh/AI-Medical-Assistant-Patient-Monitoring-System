@@ -1,7 +1,7 @@
 """Patient service — business logic for patient profiles, medical history, allergies, timeline, and AI summary."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import select
 
@@ -150,6 +150,55 @@ class PatientService:
 
         profiles = db.session.execute(stmt).scalars().all()
         return [self._to_response(p) for p in profiles]
+
+    def assign_primary_doctor(self, patient_user_id: str, doctor_user_id: str) -> None:
+        """Set ``assigned_doctor_id`` on the patient's profile to this doctor (user ids).
+
+        Intended to run in the same SQLAlchemy session as other writes; does **not** commit.
+        No-op if the patient has no ``PatientProfile`` row yet.
+        """
+        try:
+            uid = uuid.UUID(patient_user_id)
+            did = uuid.UUID(doctor_user_id)
+        except ValueError:
+            return
+
+        profile = db.session.execute(
+            select(PatientProfile).where(PatientProfile.user_id == uid)
+        ).scalar_one_or_none()
+        if profile is None:
+            return
+        profile.assigned_doctor_id = did
+
+    def ensure_placeholder_profile_for_patient_user(self, user_id: str) -> None:
+        """If the user is a patient with no ``PatientProfile``, insert a minimal row.
+
+        Does not commit. Lets doctors receive ``assign_primary_doctor`` after the patient
+        books and the doctor confirms, even when the patient has not completed the full
+        profile wizard yet. The patient should replace placeholder demographics via profile.
+        """
+        try:
+            uid = uuid.UUID(user_id)
+        except ValueError:
+            return
+
+        existing = db.session.execute(
+            select(PatientProfile).where(PatientProfile.user_id == uid)
+        ).scalar_one_or_none()
+        if existing is not None:
+            return
+
+        user = db.session.get(User, uid)
+        if not user or user.role != "patient":
+            return
+
+        profile = PatientProfile(
+            user_id=uid,
+            date_of_birth=date(2000, 1, 1),
+            gender=None,
+            blood_type=None,
+        )
+        db.session.add(profile)
 
     # --- Medical History ---
 
@@ -648,22 +697,42 @@ class PatientService:
         first_name = None
         last_name = None
         email = None
+        phone = None
         try:
             user = db.session.get(User, profile.user_id)
             if user:
                 first_name = user.first_name
                 last_name = user.last_name
                 email = user.email
+                phone = user.phone
         except Exception:
             pass
+
+        name_parts = [x for x in (first_name, last_name) if x]
+        display_name = " ".join(name_parts) if name_parts else None
+
+        assigned_doctor_name = None
+        if profile.assigned_doctor_id:
+            try:
+                doc_user = db.session.get(User, profile.assigned_doctor_id)
+                if doc_user:
+                    if doc_user.last_name:
+                        assigned_doctor_name = f"Dr. {doc_user.last_name}".strip()
+                    else:
+                        assigned_doctor_name = (
+                            f"{doc_user.first_name or ''} {doc_user.last_name or ''}".strip() or None
+                        )
+            except Exception:
+                pass
 
         return PatientProfileResponse(
             id=str(profile.id),
             user_id=str(profile.user_id),
             first_name=first_name,
             last_name=last_name,
-            name=f"{first_name} {last_name}" if first_name else None,
+            name=display_name,
             email=email,
+            phone=phone,
             date_of_birth=profile.date_of_birth,
             gender=profile.gender,
             blood_type=profile.blood_type,
@@ -672,6 +741,7 @@ class PatientService:
             emergency_contact=profile.emergency_contact,
             insurance_info=profile.insurance_info,
             assigned_doctor_id=str(profile.assigned_doctor_id) if profile.assigned_doctor_id else None,
+            assigned_doctor_name=assigned_doctor_name,
         )
 
     @staticmethod
