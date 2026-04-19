@@ -33,7 +33,13 @@ class UpdateAppointmentRequest(BaseModel):
     notes: str | None = Field(default=None, max_length=2000)
     status: str | None = Field(
         default=None,
-        pattern="^(scheduled|confirmed|in_progress|completed|cancelled|no_show)$",
+        pattern="^(pending|scheduled|confirmed|in_progress|completed|cancelled|no_show|denied)$",
+    )
+    patient_id: str | None = None
+    doctor_id: str | None = None
+    appointment_type: str | None = Field(
+        default=None,
+        pattern="^(in_person|telemedicine|follow_up|emergency)$",
     )
     patient_id: str | None = None
     doctor_id: str | None = None
@@ -88,6 +94,12 @@ class AppointmentListParams(BaseModel):
 class ConfirmAppointmentRequest(BaseModel):
     """Schema for confirming an appointment."""
     send_notification: bool = Field(default=True)
+
+
+class DenyAppointmentRequest(BaseModel):
+    """Optional reason when the doctor denies a pending booking request."""
+
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 class RecurringAppointmentRequest(BaseModel):

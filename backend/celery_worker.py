@@ -10,8 +10,10 @@ from app.extensions import make_celery
 app = create_app()
 celery = make_celery(app)
 
-# Auto-discover tasks
-celery.autodiscover_tasks(["app.tasks"])
+# Import ``app.tasks`` (package ``app/tasks/``) for each root package in the list.
+# Wrong: ``["app.tasks"]`` → Celery looks for ``app.tasks.tasks``, which does not exist,
+# so appointment/report notification tasks never registered on the worker.
+celery.autodiscover_tasks(["app"], related_name="tasks", force=True)
 
 # Celery Beat schedule
 celery.conf.beat_schedule = {

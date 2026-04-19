@@ -174,10 +174,21 @@ export default function BookingFlow({ onBooked, onCancel }: BookingFlowProps) {
       });
       onBooked();
     } catch (err: unknown) {
-      const ax = err as { response?: { data?: { error?: { message?: string } } } };
+      const ax = err as {
+        code?: string;
+        message?: string;
+        response?: { data?: { error?: { message?: string } }; status?: number };
+      };
+      const serverMsg = ax.response?.data?.error?.message;
+      const isNetwork =
+        ax.code === "ERR_NETWORK" ||
+        ax.message === "Network Error" ||
+        (!ax.response && ax.message?.toLowerCase().includes("network"));
       const msg =
-        ax.response?.data?.error?.message ??
-        (err as Error)?.message ??
+        serverMsg ??
+        (isNetwork
+          ? "Cannot reach the server, or the request failed before a response. Check that the API is running; if you use Docker, restart the backend after pulling the latest code."
+          : ax.message) ??
         "Failed to book appointment. Please try again.";
       setError(msg);
     } finally {

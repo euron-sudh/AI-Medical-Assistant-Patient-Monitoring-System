@@ -36,15 +36,26 @@ const TYPE_STYLES: Record<string, string> = {
 };
 
 const STATUS_STYLES: Record<string, string> = {
+  pending: "bg-amber-50 text-amber-800",
   scheduled: "bg-blue-50 text-blue-700",
   confirmed: "bg-green-50 text-green-700",
   in_progress: "bg-amber-50 text-amber-700",
   completed: "bg-gray-50 text-gray-600",
   cancelled: "bg-red-50 text-red-600",
   no_show: "bg-orange-50 text-orange-700",
+  denied: "bg-slate-100 text-slate-600",
 };
 
-const ALL_STATUSES = ["scheduled", "confirmed", "in_progress", "completed", "cancelled", "no_show"];
+const ALL_STATUSES = [
+  "pending",
+  "scheduled",
+  "confirmed",
+  "in_progress",
+  "completed",
+  "cancelled",
+  "no_show",
+  "denied",
+];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function DoctorAppointmentsPage() {
@@ -77,9 +88,13 @@ export default function DoctorAppointmentsPage() {
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0];
   const todayAppointments = appointments.filter((a) => a.scheduled_at?.startsWith(todayStr));
-  const upcoming = filtered.filter((a) => new Date(a.scheduled_at) > now && a.status !== "cancelled" && a.status !== "completed")
+  const upcoming = filtered.filter((a) => new Date(a.scheduled_at) > now && a.status !== "cancelled" && a.status !== "completed" && a.status !== "denied")
     .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
-  const past = filtered.filter((a) => new Date(a.scheduled_at) <= now || a.status === "completed" || a.status === "cancelled")
+  const past = filtered.filter(
+    (a) =>
+      new Date(a.scheduled_at) <= now ||
+      ["completed", "cancelled", "denied"].includes(a.status)
+  )
     .sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
 
   const totalThisWeek = appointments.filter((a) => {
@@ -89,7 +104,11 @@ export default function DoctorAppointmentsPage() {
     return d >= ws && d < we;
   }).length;
 
-  const pending = appointments.filter((a) => a.status === "scheduled" && new Date(a.scheduled_at) > now).length;
+  const pending = appointments.filter(
+    (a) =>
+      (a.status === "pending" || a.status === "scheduled") &&
+      new Date(a.scheduled_at) > now
+  ).length;
 
   const handleConfirm = async (id: string) => {
     setActionLoading(id);
@@ -98,6 +117,19 @@ export default function DoctorAppointmentsPage() {
       setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status: "confirmed" } : a)));
     } catch { alert("Failed to confirm appointment."); }
     finally { setActionLoading(null); }
+  };
+
+  const handleDeny = async (id: string) => {
+    if (!confirm("Deny this booking request? The patient will see it as denied.")) return;
+    setActionLoading(id);
+    try {
+      await apiClient.put(`/appointments/${id}/deny`, {});
+      setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status: "denied" } : a)));
+    } catch {
+      alert("Failed to deny appointment.");
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleCancel = async (id: string) => {
@@ -137,8 +169,9 @@ export default function DoctorAppointmentsPage() {
       <span><span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[appt.status] ?? "bg-gray-100 text-gray-700"}`}>{appt.status}</span></span>
       <span className="truncate text-muted-foreground">{appt.reason ?? "--"}</span>
       <span className="flex items-center justify-end gap-1">
-        {appt.status === "scheduled" && (<>
+        {(appt.status === "pending" || appt.status === "scheduled") && (<>
           <button onClick={() => handleConfirm(appt.id)} disabled={actionLoading === appt.id} className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"><Check className="h-3 w-3" /> Confirm</button>
+          <button onClick={() => handleDeny(appt.id)} disabled={actionLoading === appt.id} className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"><X className="h-3 w-3" /> Deny</button>
           <button onClick={() => handleCancel(appt.id)} disabled={actionLoading === appt.id} className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"><X className="h-3 w-3" /> Cancel</button>
         </>)}
         {appt.status === "confirmed" && (

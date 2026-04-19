@@ -35,6 +35,9 @@ class BaseConfig:
     # Celery
     CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1")
     CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/2")
+    # When true, .delay() runs tasks in-process (no worker). Dev-only; do not use in production.
+    CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true"
+    CELERY_TASK_EAGER_PROPAGATES = os.getenv("CELERY_TASK_EAGER_PROPAGATES", "true").lower() == "true"
 
     # EURI API Gateway (OpenAI-compatible) — https://euron.one/euri
     EURI_BASE_URL = os.getenv("EURI_BASE_URL", "https://api.euron.one/api/v1/euri")
@@ -87,12 +90,18 @@ class BaseConfig:
     SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
     SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL", "")
 
-    # SMTP (fallback when SendGrid is not configured — supports Gmail SMTP, etc.)
+    # SMTP — Gmail: smtp.gmail.com, port 587 + STARTTLS (SMTP_USE_TLS=true, SMTP_USE_SSL=false).
+    # Port 465: set SMTP_USE_SSL=true, SMTP_USE_TLS=false (implicit TLS, no STARTTLS).
+    # SMTP_USER is accepted as an alias for SMTP_USERNAME (Gmail login = full email).
+    # If SENDGRID_API_KEY is set, SendGrid is used first; leave it empty for SMTP-only.
     SMTP_HOST = os.getenv("SMTP_HOST", "")
     SMTP_PORT = int(os.getenv("SMTP_PORT", "587") or 587)
-    SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
+    # SMTP_USER is a common Gmail env name; merged into SMTP_USERNAME for login.
+    SMTP_USER = os.getenv("SMTP_USER", "")
+    SMTP_USERNAME = os.getenv("SMTP_USERNAME") or os.getenv("SMTP_USER", "")
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
     SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+    SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
     SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "")
     SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "MedAssist AI")
     APP_PUBLIC_URL = os.getenv("APP_PUBLIC_URL", "http://medassist-ai.136.119.221.67.nip.io")

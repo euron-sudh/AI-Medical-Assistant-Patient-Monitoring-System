@@ -100,6 +100,147 @@ def appointment_booked_email(
     )
 
 
+def appointment_patient_booking_received_email(
+    patient_name: str,
+    doctor_name: str,
+    specialty: str,
+    scheduled_at: datetime,
+    duration_minutes: int,
+    appointment_type: str,
+    reason: str | None,
+    booking_status: str,
+    portal_url: str,
+) -> tuple[str, str]:
+    """Patient: booking received; may still await doctor confirmation."""
+    when = scheduled_at.strftime("%A, %d %B %Y at %H:%M UTC")
+    slot_line = f"{appointment_type.replace('_', ' ').title()} · {duration_minutes} minutes"
+    reason_html = (
+        f'<p style="margin:12px 0 0;color:#475569;"><strong>Notes / reason:</strong> {reason}</p>'
+        if reason
+        else ""
+    )
+    status_note = (
+        "Your request is pending confirmation from your doctor. You will receive another email "
+        "once the appointment is confirmed."
+        if booking_status == "pending"
+        else "Please review the details below."
+    )
+    body = f"""
+    <p style="margin:0 0 16px;font-size:16px;">Hi {patient_name},</p>
+    <p style="margin:0 0 16px;color:#334155;line-height:1.6;">
+      We have received your appointment booking request. {status_note}
+    </p>
+    <div style="border:1px solid #e2e8f0;border-radius:12px;padding:20px;background:#f8fafc;">
+      <div style="font-size:14px;color:#64748b;margin-bottom:4px;">Booking status</div>
+      <div style="font-size:15px;font-weight:600;color:#0f172a;text-transform:capitalize;">{booking_status.replace("_", " ")}</div>
+      <div style="font-size:14px;color:#64748b;margin:16px 0 4px;">Doctor</div>
+      <div style="font-size:17px;font-weight:600;color:#0f172a;">{doctor_name}</div>
+      <div style="font-size:13px;color:#64748b;margin-top:2px;">{specialty}</div>
+      <div style="font-size:14px;color:#64748b;margin:16px 0 4px;">Date &amp; time</div>
+      <div style="font-size:16px;color:#0f172a;">{when}</div>
+      <div style="font-size:14px;color:#64748b;margin:16px 0 4px;">Slot</div>
+      <div style="font-size:15px;color:#0f172a;">{slot_line}</div>
+      {reason_html}
+    </div>
+    <div style="margin-top:24px;text-align:center;">
+      <a href="{portal_url}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:10px;font-weight:600;font-size:14px;">Open MedAssist</a>
+    </div>
+    <p style="margin:24px 0 0;color:#64748b;font-size:13px;line-height:1.6;">
+      To reschedule or cancel, sign in to your patient dashboard.
+    </p>
+    """
+    return (
+        "Appointment Booking Received - MedAssist",
+        _wrap("Booking received", "Appointment request received", body),
+    )
+
+
+def appointment_doctor_booking_request_email(
+    doctor_name: str,
+    patient_full_name: str,
+    scheduled_at: datetime,
+    duration_minutes: int,
+    appointment_type: str,
+    reason: str | None,
+    portal_url: str,
+) -> tuple[str, str]:
+    """Doctor: new booking; ask to confirm or deny."""
+    when = scheduled_at.strftime("%A, %d %B %Y at %H:%M UTC")
+    slot_line = f"{appointment_type.replace('_', ' ').title()} · {duration_minutes} minutes"
+    reason_html = (
+        f'<p style="margin:12px 0 0;color:#475569;"><strong>Patient notes / reason:</strong> {reason}</p>'
+        if reason
+        else ""
+    )
+    body = f"""
+    <p style="margin:0 0 16px;font-size:16px;">Hello {doctor_name},</p>
+    <p style="margin:0 0 16px;color:#334155;line-height:1.6;">
+      <strong>{patient_full_name}</strong> has booked a slot with you. Please confirm or deny the booking
+      in your MedAssist doctor portal.
+    </p>
+    <div style="border:1px solid #e2e8f0;border-radius:12px;padding:20px;background:#f8fafc;">
+      <div style="font-size:14px;color:#64748b;margin-bottom:4px;">Patient</div>
+      <div style="font-size:17px;font-weight:600;color:#0f172a;">{patient_full_name}</div>
+      <div style="font-size:14px;color:#64748b;margin:16px 0 4px;">Appointment date</div>
+      <div style="font-size:16px;color:#0f172a;">{when}</div>
+      <div style="font-size:14px;color:#64748b;margin:16px 0 4px;">Booked slot</div>
+      <div style="font-size:15px;color:#0f172a;">{slot_line}</div>
+      {reason_html}
+    </div>
+    <div style="margin-top:24px;text-align:center;">
+      <a href="{portal_url}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:10px;font-weight:600;font-size:14px;">Review booking</a>
+    </div>
+    <p style="margin:24px 0 0;color:#64748b;font-size:13px;line-height:1.6;">
+      If this request is not appropriate, deny it so the patient can choose another time or provider.
+    </p>
+    """
+    return (
+        "New Appointment Booking Request - MedAssist",
+        _wrap("Action required", "New appointment booking", body),
+    )
+
+
+def appointment_patient_confirmed_email(
+    patient_name: str,
+    doctor_name: str,
+    specialty: str,
+    scheduled_at: datetime,
+    duration_minutes: int,
+    appointment_type: str,
+    portal_url: str,
+) -> tuple[str, str]:
+    """Patient: doctor has confirmed the visit."""
+    when = scheduled_at.strftime("%A, %d %B %Y at %H:%M UTC")
+    slot_line = f"{appointment_type.replace('_', ' ').title()} · {duration_minutes} minutes"
+    body = f"""
+    <p style="margin:0 0 16px;font-size:16px;">Hi {patient_name},</p>
+    <p style="margin:0 0 16px;color:#334155;line-height:1.6;">
+      Your appointment booking is <strong>confirmed</strong>. {doctor_name} has accepted your visit.
+    </p>
+    <div style="border:1px solid #e2e8f0;border-radius:12px;padding:20px;background:#f0fdf4;">
+      <div style="font-size:14px;color:#64748b;margin-bottom:4px;">Status</div>
+      <div style="font-size:15px;font-weight:600;color:#166534;">Confirmed</div>
+      <div style="font-size:14px;color:#64748b;margin:16px 0 4px;">Doctor</div>
+      <div style="font-size:17px;font-weight:600;color:#0f172a;">{doctor_name}</div>
+      <div style="font-size:13px;color:#64748b;margin-top:2px;">{specialty}</div>
+      <div style="font-size:14px;color:#64748b;margin:16px 0 4px;">Confirmed date &amp; time</div>
+      <div style="font-size:16px;color:#0f172a;">{when}</div>
+      <div style="font-size:14px;color:#64748b;margin:16px 0 4px;">Slot</div>
+      <div style="font-size:15px;color:#0f172a;">{slot_line}</div>
+    </div>
+    <div style="margin-top:24px;text-align:center;">
+      <a href="{portal_url}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:10px;font-weight:600;font-size:14px;">View appointment</a>
+    </div>
+    <p style="margin:24px 0 0;color:#64748b;font-size:13px;line-height:1.6;">
+      Please arrive on time or join your telemedicine session from the link in your dashboard.
+    </p>
+    """
+    return (
+        "Appointment Confirmed - MedAssist",
+        _wrap("Appointment confirmed", "Your visit is confirmed", body),
+    )
+
+
 def report_ready_email(
     patient_name: str,
     report_title: str,

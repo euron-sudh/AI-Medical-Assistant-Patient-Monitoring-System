@@ -120,7 +120,7 @@ def sample_appointment(db, patient, doctor, future_time):
         patient_id=patient.id,
         doctor_id=doctor.id,
         appointment_type="in_person",
-        status="scheduled",
+        status="pending",
         scheduled_at=future_time,
         duration_minutes=30,
         reason="Annual checkup",
@@ -157,11 +157,11 @@ def telemedicine_appointment(db, patient, doctor, future_time):
 class TestCreateAppointment:
 
     def test_create_appointment_success(self, appt_service, create_request, patient):
-        """Creating an appointment returns 'scheduled' status."""
+        """Patient-created appointment starts as pending (awaits doctor confirmation)."""
         result = appt_service.create_appointment(create_request, created_by=patient.id)
         assert result.id is not None
         assert result.patient_id == str(patient.id)
-        assert result.status == "scheduled"
+        assert result.status == "pending"
         assert result.appointment_type == "in_person"
         assert result.reason == "Annual checkup"
         assert result.duration_minutes == 30
@@ -241,7 +241,7 @@ class TestListAppointments:
     def test_filter_by_status(self, appt_service, patient, sample_appointment):
         """Status filter works correctly."""
         results = appt_service.list_appointments(
-            user_id=patient.id, role="patient", status="scheduled"
+            user_id=patient.id, role="patient", status="pending"
         )
         assert len(results) == 1
 
@@ -259,7 +259,7 @@ class TestGetUpcoming:
         """get_upcoming returns future scheduled appointments."""
         results = appt_service.get_upcoming(patient.id)
         assert len(results) == 1
-        assert results[0].status == "scheduled"
+        assert results[0].status == "pending"
 
 
 class TestUpdateAppointment:
@@ -271,7 +271,7 @@ class TestUpdateAppointment:
         assert result.notes == "Bring lab results"
 
     def test_valid_status_transition(self, appt_service, sample_appointment):
-        """scheduled → confirmed is valid."""
+        """pending → confirmed is valid."""
         data = UpdateAppointmentRequest(status="confirmed")
         result = appt_service.update_appointment(sample_appointment.id, data)
         assert result.status == "confirmed"
@@ -279,7 +279,7 @@ class TestUpdateAppointment:
     def test_confirm_via_update_sets_assigned_doctor(
         self, appt_service, db, patient, doctor, patient_with_profile, sample_appointment
     ):
-        """scheduled → confirmed assigns the appointment doctor on the patient profile."""
+        """pending → confirmed assigns the appointment doctor on the patient profile."""
         data = UpdateAppointmentRequest(status="confirmed")
         appt_service.update_appointment(sample_appointment.id, data)
         profile = db.session.execute(
@@ -288,7 +288,7 @@ class TestUpdateAppointment:
         assert profile.assigned_doctor_id == doctor.id
 
     def test_invalid_status_transition(self, appt_service, sample_appointment):
-        """scheduled → completed is invalid."""
+        """pending → completed is invalid."""
         data = UpdateAppointmentRequest(status="completed")
         with pytest.raises(ValueError, match="Cannot transition"):
             appt_service.update_appointment(sample_appointment.id, data)
@@ -310,6 +310,30 @@ class TestConfirmAppointment:
             select(PatientProfile).where(PatientProfile.user_id == patient.id)
         ).scalar_one()
         assert profile.assigned_doctor_id == doctor.id
+
+
+class TestDenyAppointment:
+    def test_deny_pending_sets_denied(self, appt_service, db, patient, doctor, sample_appointment):
+        """Doctor can deny a pending request."""
+        result = appt_service.deny_appointment(sample_appointment.id, doctor.id, reason="Slot conflict")
+        assert result.status == "denied"
+
+
+class TestStaffCreatedAppointmentStatus:
+    def test_staff_created_starts_scheduled(
+        self, appt_service, create_request, patient, doctor, future_time
+    ):
+        """Non-patient creator (e.g. doctor/admin) uses scheduled until confirm."""
+        req = CreateAppointmentRequest(
+            patient_id=str(patient.id),
+            doctor_id=str(doctor.id),
+            appointment_type="in_person",
+            scheduled_at=future_time + timedelta(days=1),
+            duration_minutes=30,
+            reason="Staff booking",
+        )
+        result = appt_service.create_appointment(req, created_by=doctor.id)
+        assert result.status == "scheduled"
 
 
 class TestCancelAppointment:

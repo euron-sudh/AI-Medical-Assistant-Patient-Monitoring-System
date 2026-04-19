@@ -23,6 +23,7 @@ from app.schemas.appointment_schema import (
     CancelAppointmentRequest,
     ConfirmAppointmentRequest,
     CreateAppointmentRequest,
+    DenyAppointmentRequest,
     RecurringAppointmentRequest,
     UpdateAppointmentRequest,
 )
@@ -302,6 +303,34 @@ def confirm_appointment(appointment_id: str):
         return jsonify({"error": {"code": "VALIDATION_ERROR", "details": e.errors()}}), 400
     try:
         appointment = appointment_service.confirm_appointment(appt_uuid, current_user_id, send_notification=data.send_notification)
+    except ValueError as e:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": str(e)}}), 400
+    return jsonify(appointment.model_dump(mode="json")), 200
+
+
+@bp.route("/<appointment_id>/deny", methods=["PUT"])
+@jwt_required()
+def deny_appointment(appointment_id: str):
+    """Deny a pending booking request (doctor or admin only)."""
+    try:
+        appt_uuid = uuid.UUID(appointment_id)
+    except ValueError:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Invalid appointment ID"}}), 400
+    claims = get_jwt()
+    current_user_id = uuid.UUID(get_jwt_identity())
+    role = claims.get("role", "")
+    if role not in ("doctor", "admin"):
+        return jsonify({"error": {"code": "FORBIDDEN", "message": "Only doctors or admins can deny bookings"}}), 403
+    if not appointment_service.check_appointment_access(appt_uuid, current_user_id, role):
+        return jsonify({"error": {"code": "FORBIDDEN", "message": "Access denied"}}), 403
+    try:
+        data = DenyAppointmentRequest.model_validate(request.get_json() or {})
+    except ValidationError as e:
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "details": e.errors()}}), 400
+    try:
+        appointment = appointment_service.deny_appointment(
+            appt_uuid, current_user_id, reason=data.reason
+        )
     except ValueError as e:
         return jsonify({"error": {"code": "BAD_REQUEST", "message": str(e)}}), 400
     return jsonify(appointment.model_dump(mode="json")), 200
